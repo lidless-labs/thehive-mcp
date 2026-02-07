@@ -12,25 +12,37 @@ import { registerUserTools } from "./tools/users.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts.js";
 
-const server = new McpServer({
-  name: "thehive-mcp",
-  version: "1.0.0",
-  description:
-    "MCP server for TheHive - security incident response platform. Provides tools for managing cases, alerts, tasks, observables, and incident response workflows.",
+async function main(): Promise<void> {
+  const config = getConfig();
+
+  if (!config.verifySsl) {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+  }
+
+  const server = new McpServer({
+    name: "thehive-mcp",
+    version: "1.0.0",
+    description:
+      "MCP server for TheHive - security incident response platform. Provides tools for managing cases, alerts, tasks, observables, and incident response workflows.",
+  });
+
+  const client = new TheHiveClient(config);
+
+  registerCaseTools(server, client);
+  registerAlertTools(server, client);
+  registerTaskTools(server, client);
+  registerObservableTools(server, client);
+  registerTaskLogTools(server, client);
+  registerCommentTools(server, client);
+  registerUserTools(server, client);
+  registerResources(server, client);
+  registerPrompts(server);
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+main().catch((error: unknown) => {
+  console.error("Fatal error:", error);
+  process.exit(1);
 });
-
-const config = getConfig();
-const client = new TheHiveClient(config);
-
-registerCaseTools(server, client);
-registerAlertTools(server, client);
-registerTaskTools(server, client);
-registerObservableTools(server, client);
-registerTaskLogTools(server, client);
-registerCommentTools(server, client);
-registerUserTools(server, client);
-registerResources(server, client);
-registerPrompts(server);
-
-const transport = new StdioServerTransport();
-await server.connect(transport);

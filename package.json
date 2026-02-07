@@ -26,6 +26,14 @@
   ],
   "author": "Solomon Neas <me@solomonneas.dev>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/solomonneas/thehive-mcp.git"
+  },
+  "homepage": "https://github.com/solomonneas/thehive-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/solomonneas/thehive-mcp/issues"
+  },
   "engines": {
     "node": ">=20.0.0"
   },
