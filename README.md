@@ -1,6 +1,11 @@
 # TheHive MCP Server
 
-MCP (Model Context Protocol) server for [TheHive](https://thehive-project.org/) - an open-source security incident response platform. Exposes TheHive's API as MCP tools for AI-assisted incident response workflows.
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20%2B-green?logo=node.js)](https://nodejs.org/)
+[![MCP](https://img.shields.io/badge/MCP-1.x-purple)](https://modelcontextprotocol.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+MCP (Model Context Protocol) server for [TheHive](https://thehive-project.org/), an open-source security incident response platform. Exposes TheHive's API as MCP tools for AI-assisted incident response workflows.
 
 ## Features
 
