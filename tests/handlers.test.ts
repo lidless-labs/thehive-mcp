@@ -113,16 +113,26 @@ describe("TheHiveClient handler behavior", () => {
   });
 
   describe("updateCase", () => {
-    it("should patch a case", async () => {
+    it("should patch a case then re-fetch it", async () => {
       const updated = { _id: "case-1", title: "Updated", severity: 4 };
+      // First call: PATCH returns 204
       fetchSpy.mockResolvedValueOnce({
         ok: true,
+        status: 204,
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve(""),
+      });
+      // Second call: GET re-fetches the updated case
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: () => Promise.resolve(updated),
       });
 
       const result = await client.updateCase("case-1", { severity: 4, status: "InProgress" });
 
       expect(result).toEqual(updated);
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
       const [url, opts] = fetchSpy.mock.calls[0] as [string, RequestInit];
       expect(opts.method).toBe("PATCH");
       expect(url).toContain("/case/case-1");

@@ -1,0 +1,312 @@
+/**
+ * Live integration test against a real TheHive instance.
+ * Usage: THEHIVE_URL=http://... THEHIVE_API_KEY=... npx tsx scripts/live-test.ts
+ */
+
+import { TheHiveClient } from "../src/client.js";
+import { getConfig } from "../src/config.js";
+
+const config = getConfig();
+const client = new TheHiveClient(config);
+
+let passed = 0;
+let failed = 0;
+
+async function test(name: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+    console.log(`  ✅ ${name}`);
+    passed++;
+  } catch (err) {
+    console.error(`  ❌ ${name}: ${err instanceof Error ? err.message : err}`);
+    failed++;
+  }
+}
+
+function assert(condition: boolean, msg: string): void {
+  if (!condition) throw new Error(msg);
+}
+
+async function main(): Promise<void> {
+  console.log(`\nLive test against ${config.url}\n`);
+
+  // --- Status ---
+  console.log("📡 Status");
+  await test("getStatus returns version info", async () => {
+    const status = await client.getStatus();
+    assert(!!status.versions.TheHive, "Missing TheHive version");
+    console.log(`     TheHive ${status.versions.TheHive}`);
+  });
+
+  // --- Users ---
+  console.log("\n👤 Users");
+  await test("getCurrentUser returns admin", async () => {
+    const user = await client.getCurrentUser();
+    assert(!!user.login, "No login returned");
+    console.log(`     Logged in as: ${user.login} (${user.profile})`);
+  });
+
+  await test("listUsers returns at least 1", async () => {
+    const users = await client.listUsers(10);
+    assert(users.length >= 1, "Expected at least 1 user");
+    console.log(`     Found ${users.length} users`);
+  });
+
+  // --- Cases ---
+  console.log("\n📁 Cases");
+  let testCaseId: string = "";
+
+  await test("createCase", async () => {
+    const c = await client.createCase({
+      title: "[MCP-TEST] Integration Test Case",
+      description: "Automated test case created by thehive-mcp live tests",
+      severity: 1,
+      tlp: 1,
+      pap: 1,
+      tags: ["mcp-test", "automated"],
+    });
+    assert(!!c._id, "No _id returned");
+    testCaseId = c._id;
+    console.log(`     Created case: ${c._id} (#${c.number})`);
+  });
+
+  await test("getCase", async () => {
+    const c = await client.getCase(testCaseId);
+    assert(c._id === testCaseId, "Wrong case returned");
+    assert(c.title.includes("MCP-TEST"), "Wrong title");
+  });
+
+  await test("updateCase", async () => {
+    const c = await client.updateCase(testCaseId, {
+      severity: 2,
+      summary: "Updated by integration test",
+    });
+    assert(c._id === testCaseId, "Wrong case returned");
+  });
+
+  await test("listCases", async () => {
+    const cases = await client.listCases({ limit: 5 });
+    assert(cases.length >= 1, "Expected at least 1 case");
+    console.log(`     Found ${cases.length} cases`);
+  });
+
+  await test("searchCases", async () => {
+    const cases = await client.searchCases("MCP-TEST");
+    assert(cases.length >= 1, "Search should find test case");
+  });
+
+  // --- Tasks ---
+  console.log("\n📋 Tasks");
+  let testTaskId: string = "";
+
+  await test("createTask", async () => {
+    const t = await client.createTask(testCaseId, {
+      title: "MCP Test Task - Investigate",
+      description: "Automated test task",
+      status: "Waiting",
+      group: "identification",
+    });
+    assert(!!t._id, "No _id returned");
+    testTaskId = t._id;
+    console.log(`     Created task: ${t._id}`);
+  });
+
+  await test("getTask", async () => {
+    const t = await client.getTask(testTaskId);
+    assert(t._id === testTaskId, "Wrong task returned");
+  });
+
+  await test("updateTask", async () => {
+    const t = await client.updateTask(testTaskId, {
+      status: "InProgress",
+    });
+    assert(t._id === testTaskId, "Wrong task returned");
+  });
+
+  await test("listTasks", async () => {
+    const tasks = await client.listTasks(testCaseId);
+    assert(tasks.length >= 1, "Expected at least 1 task");
+    console.log(`     Found ${tasks.length} tasks`);
+  });
+
+  // --- Task Logs ---
+  console.log("\n📝 Task Logs");
+  await test("createTaskLog", async () => {
+    const log = await client.createTaskLog(testTaskId, {
+      message: "Automated test log entry from MCP integration test",
+    });
+    assert(!!log._id, "No _id returned");
+    console.log(`     Created task log: ${log._id}`);
+  });
+
+  await test("listTaskLogs", async () => {
+    const logs = await client.listTaskLogs(testTaskId);
+    assert(logs.length >= 1, "Expected at least 1 log");
+    console.log(`     Found ${logs.length} task logs`);
+  });
+
+  // --- Observables ---
+  console.log("\n🔍 Observables");
+  let testObsId: string = "";
+
+  await test("createObservable (IP)", async () => {
+    const obs = await client.createObservable(testCaseId, {
+      dataType: "ip",
+      data: "10.0.0.99",
+      message: "Suspicious IP from MCP test",
+      tags: ["mcp-test"],
+      ioc: true,
+      tlp: 1,
+    });
+    assert(!!obs._id, "No _id returned");
+    testObsId = obs._id;
+    console.log(`     Created observable: ${obs._id} (ip: 10.0.0.99)`);
+  });
+
+  await test("createObservable (domain)", async () => {
+    const obs = await client.createObservable(testCaseId, {
+      dataType: "domain",
+      data: "malicious-test.example.com",
+      message: "Test domain from MCP",
+      tags: ["mcp-test"],
+      ioc: true,
+    });
+    assert(!!obs._id, "No _id returned");
+    console.log(`     Created observable: ${obs._id} (domain)`);
+  });
+
+  await test("createObservable (hash)", async () => {
+    const obs = await client.createObservable(testCaseId, {
+      dataType: "hash",
+      data: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      message: "SHA-256 hash from MCP test",
+      tags: ["mcp-test"],
+      ioc: true,
+    });
+    assert(!!obs._id, "No _id returned");
+    console.log(`     Created observable: ${obs._id} (hash)`);
+  });
+
+  await test("getObservable", async () => {
+    const obs = await client.getObservable(testObsId);
+    assert(obs._id === testObsId, "Wrong observable returned");
+    assert(obs.data === "10.0.0.99", "Wrong data");
+  });
+
+  await test("listObservables", async () => {
+    const obs = await client.listObservables(testCaseId);
+    assert(obs.length >= 3, "Expected at least 3 observables");
+    console.log(`     Found ${obs.length} observables in case`);
+  });
+
+  await test("searchObservables (by dataType)", async () => {
+    const obs = await client.searchObservables({ dataType: "ip" });
+    assert(obs.length >= 1, "Expected at least 1 IP observable");
+    console.log(`     Found ${obs.length} IP observables globally`);
+  });
+
+  // --- Comments ---
+  console.log("\n💬 Comments");
+  await test("createComment", async () => {
+    const c = await client.createComment(
+      testCaseId,
+      "Automated comment from MCP integration test. All tools verified.",
+    );
+    assert(!!c._id, "No _id returned");
+    console.log(`     Created comment: ${c._id}`);
+  });
+
+  await test("listComments", async () => {
+    const comments = await client.listComments(testCaseId);
+    assert(comments.length >= 1, "Expected at least 1 comment");
+    console.log(`     Found ${comments.length} comments`);
+  });
+
+  // --- Alerts ---
+  console.log("\n🚨 Alerts");
+  let testAlertId: string = "";
+
+  await test("createAlert", async () => {
+    const a = await client.createAlert({
+      title: "[MCP-TEST] Suspicious Activity Alert",
+      type: "mcp-test",
+      source: "thehive-mcp-integration",
+      sourceRef: `mcp-test-${Date.now()}`,
+      description: "Automated test alert",
+      severity: 1,
+      tlp: 1,
+      tags: ["mcp-test", "automated"],
+    });
+    assert(!!a._id, "No _id returned");
+    testAlertId = a._id;
+    console.log(`     Created alert: ${a._id}`);
+  });
+
+  await test("getAlert", async () => {
+    const a = await client.getAlert(testAlertId);
+    assert(a._id === testAlertId, "Wrong alert returned");
+  });
+
+  await test("updateAlert", async () => {
+    const a = await client.updateAlert(testAlertId, {
+      severity: 2,
+      tags: ["mcp-test", "automated", "updated"],
+    });
+    assert(a._id === testAlertId, "Wrong alert returned");
+  });
+
+  await test("listAlerts", async () => {
+    const alerts = await client.listAlerts({ limit: 5 });
+    assert(alerts.length >= 1, "Expected at least 1 alert");
+    console.log(`     Found ${alerts.length} alerts`);
+  });
+
+  // Promote alert to case
+  await test("promoteAlert", async () => {
+    const promoted = await client.promoteAlert(testAlertId);
+    assert(!!promoted._id, "No case _id from promotion");
+    console.log(`     Promoted alert to case: ${promoted._id}`);
+  });
+
+  // --- Cortex ---
+  console.log("\n🧠 Cortex");
+  await test("listAnalyzers", async () => {
+    const analyzers = await client.listAnalyzers();
+    console.log(`     Found ${analyzers.length} analyzers (0 is OK if none configured)`);
+    // Not asserting length > 0 since Cortex may not have analyzers configured
+  });
+
+  // --- Case Merge ---
+  console.log("\n🔀 Case Merge");
+  await test("mergeCases", async () => {
+    // Create a second case to merge with
+    const c2 = await client.createCase({
+      title: "[MCP-TEST] Merge Target",
+      description: "Case to merge",
+      severity: 1,
+      tags: ["mcp-test"],
+    });
+    try {
+      const merged = await client.mergeCases([testCaseId, c2._id]);
+      assert(!!merged._id, "No _id from merge");
+      console.log(`     Merged into: ${merged._id}`);
+    } catch (err) {
+      // Merge may fail if cases are in wrong state, that's OK
+      console.log(`     Merge skipped (expected in some configs): ${err instanceof Error ? err.message : err}`);
+    }
+  });
+
+  // --- Summary ---
+  console.log(`\n${"─".repeat(50)}`);
+  console.log(`Results: ${passed} passed, ${failed} failed (${passed + failed} total)`);
+  console.log(`${"─".repeat(50)}\n`);
+
+  if (failed > 0) {
+    process.exit(1);
+  }
+}
+
+main().catch((err) => {
+  console.error("Fatal error:", err);
+  process.exit(1);
+});

@@ -9,6 +9,8 @@ import { registerObservableTools } from "./tools/observables.js";
 import { registerTaskLogTools } from "./tools/task-logs.js";
 import { registerCommentTools } from "./tools/comments.js";
 import { registerUserTools } from "./tools/users.js";
+import { registerCortexTools } from "./tools/cortex.js";
+import { registerStatusTools } from "./tools/status.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts.js";
 
@@ -35,6 +37,8 @@ async function main(): Promise<void> {
   registerTaskLogTools(server, client);
   registerCommentTools(server, client);
   registerUserTools(server, client);
+  registerCortexTools(server, client);
+  registerStatusTools(server, client);
   registerResources(server, client);
   registerPrompts(server);
 

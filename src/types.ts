@@ -127,3 +127,44 @@ export interface TheHiveQuery {
   range?: string;
   sort?: string[];
 }
+
+export interface TheHiveAnalyzer {
+  id: string;
+  name: string;
+  version?: string;
+  description?: string;
+  dataTypeList?: string[];
+  cortexIds?: string[];
+}
+
+export interface TheHiveJob {
+  _id: string;
+  _type?: string;
+  _createdBy?: string;
+  _createdAt?: number;
+  analyzerId?: string;
+  analyzerName?: string;
+  analyzerDefinition?: string;
+  status?: string;
+  startDate?: number;
+  endDate?: number;
+  report?: Record<string, unknown>;
+  cortexId?: string;
+  cortexJobId?: string;
+  observableId?: string;
+}
+
+export interface TheHiveStatus {
+  versions: {
+    Scalligraph: string;
+    TheHive: string;
+    Play: string;
+  };
+  config: {
+    protectDownloadsWith?: string;
+    authType?: string[];
+    capabilities?: string[];
+    ssoAutoLogin?: boolean;
+    freeTagDefaultColour?: string;
+  };
+}

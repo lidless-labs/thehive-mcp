@@ -8,6 +8,8 @@ import { registerObservableTools } from "../src/tools/observables.js";
 import { registerTaskLogTools } from "../src/tools/task-logs.js";
 import { registerCommentTools } from "../src/tools/comments.js";
 import { registerUserTools } from "../src/tools/users.js";
+import { registerCortexTools } from "../src/tools/cortex.js";
+import { registerStatusTools } from "../src/tools/status.js";
 
 const mockConfig = {
   url: "https://thehive.example.com",
@@ -126,7 +128,31 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_get_current_user");
   });
 
-  it("should register all 25 tools total", () => {
+  it("should register 3 cortex tools", () => {
+    registerCortexTools(server, client);
+
+    expect(toolSpy).toHaveBeenCalledTimes(3);
+
+    const toolNames = toolSpy.mock.calls.map(
+      (call: unknown[]) => call[0] as string,
+    );
+    expect(toolNames).toContain("thehive_list_analyzers");
+    expect(toolNames).toContain("thehive_run_analyzer");
+    expect(toolNames).toContain("thehive_get_job");
+  });
+
+  it("should register 1 status tool", () => {
+    registerStatusTools(server, client);
+
+    expect(toolSpy).toHaveBeenCalledTimes(1);
+
+    const toolNames = toolSpy.mock.calls.map(
+      (call: unknown[]) => call[0] as string,
+    );
+    expect(toolNames).toContain("thehive_status");
+  });
+
+  it("should register all 29 tools total", () => {
     registerCaseTools(server, client);
     registerAlertTools(server, client);
     registerTaskTools(server, client);
@@ -134,7 +160,9 @@ describe("tool registration", () => {
     registerTaskLogTools(server, client);
     registerCommentTools(server, client);
     registerUserTools(server, client);
+    registerCortexTools(server, client);
+    registerStatusTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(25);
+    expect(toolSpy).toHaveBeenCalledTimes(29);
   });
 });

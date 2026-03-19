@@ -7,6 +7,9 @@ import type {
   TheHiveTaskLog,
   TheHiveComment,
   TheHiveUser,
+  TheHiveAnalyzer,
+  TheHiveJob,
+  TheHiveStatus,
 } from "./types.js";
 
 export class TheHiveClient {
@@ -45,6 +48,11 @@ export class TheHiveClient {
         const body = await response.text().catch(() => "");
         const message = this.getErrorMessage(response.status, body);
         throw new Error(message);
+      }
+
+      // Handle 204 No Content (e.g. PATCH updates in TheHive 5)
+      if (response.status === 204) {
+        return {} as T;
       }
 
       return (await response.json()) as T;
@@ -181,13 +189,14 @@ export class TheHiveClient {
       flag?: boolean;
     },
   ): Promise<TheHiveCase> {
-    return this.request<TheHiveCase>(
+    await this.request<Record<string, never>>(
       `/case/${encodeURIComponent(caseId)}`,
       {
         method: "PATCH",
         body: JSON.stringify(data),
       },
     );
+    return this.getCase(caseId);
   }
 
   async searchCases(
@@ -290,13 +299,14 @@ export class TheHiveClient {
       follow?: boolean;
     },
   ): Promise<TheHiveAlert> {
-    return this.request<TheHiveAlert>(
+    await this.request<Record<string, never>>(
       `/alert/${encodeURIComponent(alertId)}`,
       {
         method: "PATCH",
         body: JSON.stringify(data),
       },
     );
+    return this.getAlert(alertId);
   }
 
   async promoteAlert(alertId: string): Promise<TheHiveCase> {
@@ -370,13 +380,14 @@ export class TheHiveClient {
       dueDate?: number;
     },
   ): Promise<TheHiveTask> {
-    return this.request<TheHiveTask>(
+    await this.request<Record<string, never>>(
       `/task/${encodeURIComponent(taskId)}`,
       {
         method: "PATCH",
         body: JSON.stringify(data),
       },
     );
+    return this.getTask(taskId);
   }
 
   // --- Observables ---
@@ -424,13 +435,15 @@ export class TheHiveClient {
       ignoreSimilarity?: boolean;
     },
   ): Promise<TheHiveObservable> {
-    return this.request<TheHiveObservable>(
+    // TheHive 5 returns an array of observables from this endpoint
+    const result = await this.request<TheHiveObservable | TheHiveObservable[]>(
       `/case/${encodeURIComponent(caseId)}/observable`,
       {
         method: "POST",
         body: JSON.stringify(data),
       },
     );
+    return Array.isArray(result) ? result[0] : result;
   }
 
   async searchObservables(
@@ -546,5 +559,107 @@ export class TheHiveClient {
 
   async getCurrentUser(): Promise<TheHiveUser> {
     return this.request<TheHiveUser>("/user/current");
+  }
+
+  // --- Cortex ---
+
+  async listAnalyzers(dataType?: string): Promise<TheHiveAnalyzer[]> {
+    const path = dataType
+      ? `/connector/cortex/analyzer/type/${encodeURIComponent(dataType)}`
+      : "/connector/cortex/analyzer";
+    return this.connectorRequest<TheHiveAnalyzer[]>(path);
+  }
+
+  async runAnalyzer(
+    analyzerId: string,
+    cortexId: string,
+    observableId: string,
+  ): Promise<TheHiveJob> {
+    return this.connectorRequest<TheHiveJob>(
+      `/connector/cortex/job`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          analyzerId,
+          cortexId,
+          artifactId: observableId,
+        }),
+      },
+    );
+  }
+
+  async getJob(jobId: string): Promise<TheHiveJob> {
+    return this.connectorRequest<TheHiveJob>(
+      `/connector/cortex/job/${encodeURIComponent(jobId)}`,
+    );
+  }
+
+  /**
+   * Connector endpoints live under /api/connector/ not /api/v1/
+   */
+  private async connectorRequest<T>(
+    path: string,
+    options: RequestInit = {},
+  ): Promise<T> {
+    const url = `${this.baseUrl.replace("/api/v1", "/api")}${path}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          ...this.headers,
+          ...(options.headers as Record<string, string>),
+        },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        throw new Error(this.getErrorMessage(response.status, body));
+      }
+
+      if (response.status === 204) {
+        return {} as T;
+      }
+
+      return (await response.json()) as T;
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(`TheHive API timeout after ${this.timeout}ms`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  // --- Status ---
+
+  async getStatus(): Promise<TheHiveStatus> {
+    const url = this.baseUrl.replace("/api/v1", "/api/status");
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        throw new Error(this.getErrorMessage(response.status, body));
+      }
+
+      return (await response.json()) as TheHiveStatus;
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(`TheHive API timeout after ${this.timeout}ms`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 }

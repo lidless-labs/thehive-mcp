@@ -132,7 +132,10 @@ describe("TheHiveClient", () => {
 
     it("should update a case", async () => {
       const updated = { _id: "~123", title: "Updated", status: "Resolved" };
-      globalThis.fetch = mockFetch(updated);
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 204, json: () => Promise.resolve({}), text: () => Promise.resolve("") })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(updated), text: () => Promise.resolve(JSON.stringify(updated)) });
+      globalThis.fetch = fetchMock;
 
       const result = await client.updateCase("~123", {
         status: "Resolved",
@@ -140,8 +143,7 @@ describe("TheHiveClient", () => {
       });
 
       expect(result).toEqual(updated);
-      const [url, options] = (globalThis.fetch as ReturnType<typeof vi.fn>)
-        .mock.calls[0];
+      const [url, options] = fetchMock.mock.calls[0];
       expect(url).toBe("https://thehive.example.com/api/v1/case/~123");
       expect(options.method).toBe("PATCH");
     });
@@ -279,13 +281,15 @@ describe("TheHiveClient", () => {
 
     it("should update a task", async () => {
       const updated = { _id: "~t1", status: "Completed" };
-      globalThis.fetch = mockFetch(updated);
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 204, json: () => Promise.resolve({}), text: () => Promise.resolve("") })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(updated), text: () => Promise.resolve(JSON.stringify(updated)) });
+      globalThis.fetch = fetchMock;
 
       const result = await client.updateTask("~t1", { status: "Completed" });
 
       expect(result).toEqual(updated);
-      const [url, options] = (globalThis.fetch as ReturnType<typeof vi.fn>)
-        .mock.calls[0];
+      const [url, options] = fetchMock.mock.calls[0];
       expect(url).toBe("https://thehive.example.com/api/v1/task/~t1");
       expect(options.method).toBe("PATCH");
     });
