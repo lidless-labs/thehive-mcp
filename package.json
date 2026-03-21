@@ -1,6 +1,6 @@
 {
   "name": "thehive-mcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP server for TheHive security incident response platform",
   "type": "module",
   "main": "dist/index.js",
@@ -18,11 +18,17 @@
   },
   "keywords": [
     "mcp",
+    "model-context-protocol",
     "thehive",
     "security",
     "incident-response",
     "soc",
-    "siem"
+    "siem",
+    "cortex",
+    "threat-intelligence",
+    "ai-agent",
+    "claude",
+    "openai"
   ],
   "author": "Solomon Neas <me@solomonneas.dev>",
   "license": "MIT",
@@ -34,6 +40,11 @@
   "bugs": {
     "url": "https://github.com/solomonneas/thehive-mcp/issues"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=20.0.0"
   },

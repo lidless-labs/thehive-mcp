@@ -10,6 +10,8 @@ import { registerCommentTools } from "../src/tools/comments.js";
 import { registerUserTools } from "../src/tools/users.js";
 import { registerCortexTools } from "../src/tools/cortex.js";
 import { registerStatusTools } from "../src/tools/status.js";
+import { registerQueryTools } from "../src/tools/query.js";
+import { registerTemplateTools } from "../src/tools/templates.js";
 
 const mockConfig = {
   url: "https://thehive.example.com",
@@ -33,10 +35,10 @@ describe("tool registration", () => {
     server.tool = toolSpy as unknown as typeof server.tool;
   });
 
-  it("should register 6 case tools", () => {
+  it("should register 8 case tools", () => {
     registerCaseTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(6);
+    expect(toolSpy).toHaveBeenCalledTimes(8);
 
     const toolNames = toolSpy.mock.calls.map(
       (call: unknown[]) => call[0] as string,
@@ -46,13 +48,15 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_create_case");
     expect(toolNames).toContain("thehive_update_case");
     expect(toolNames).toContain("thehive_search_cases");
+    expect(toolNames).toContain("thehive_close_case");
+    expect(toolNames).toContain("thehive_delete_case");
     expect(toolNames).toContain("thehive_merge_cases");
   });
 
-  it("should register 5 alert tools", () => {
+  it("should register 6 alert tools", () => {
     registerAlertTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(5);
+    expect(toolSpy).toHaveBeenCalledTimes(6);
 
     const toolNames = toolSpy.mock.calls.map(
       (call: unknown[]) => call[0] as string,
@@ -62,6 +66,7 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_create_alert");
     expect(toolNames).toContain("thehive_update_alert");
     expect(toolNames).toContain("thehive_promote_alert");
+    expect(toolNames).toContain("thehive_delete_alert");
   });
 
   it("should register 4 task tools", () => {
@@ -78,10 +83,10 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_update_task");
   });
 
-  it("should register 4 observable tools", () => {
+  it("should register 5 observable tools", () => {
     registerObservableTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(4);
+    expect(toolSpy).toHaveBeenCalledTimes(5);
 
     const toolNames = toolSpy.mock.calls.map(
       (call: unknown[]) => call[0] as string,
@@ -89,6 +94,7 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_list_observables");
     expect(toolNames).toContain("thehive_get_observable");
     expect(toolNames).toContain("thehive_create_observable");
+    expect(toolNames).toContain("thehive_create_observable_bulk");
     expect(toolNames).toContain("thehive_search_observables");
   });
 
@@ -152,7 +158,29 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_status");
   });
 
-  it("should register all 29 tools total", () => {
+  it("should register 1 query tool", () => {
+    registerQueryTools(server, client);
+
+    expect(toolSpy).toHaveBeenCalledTimes(1);
+
+    const toolNames = toolSpy.mock.calls.map(
+      (call: unknown[]) => call[0] as string,
+    );
+    expect(toolNames).toContain("thehive_query");
+  });
+
+  it("should register 1 template tool", () => {
+    registerTemplateTools(server, client);
+
+    expect(toolSpy).toHaveBeenCalledTimes(1);
+
+    const toolNames = toolSpy.mock.calls.map(
+      (call: unknown[]) => call[0] as string,
+    );
+    expect(toolNames).toContain("thehive_list_case_templates");
+  });
+
+  it("should register all 36 tools total", () => {
     registerCaseTools(server, client);
     registerAlertTools(server, client);
     registerTaskTools(server, client);
@@ -162,7 +190,9 @@ describe("tool registration", () => {
     registerUserTools(server, client);
     registerCortexTools(server, client);
     registerStatusTools(server, client);
+    registerQueryTools(server, client);
+    registerTemplateTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(29);
+    expect(toolSpy).toHaveBeenCalledTimes(35);
   });
 });

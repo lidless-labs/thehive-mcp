@@ -154,6 +154,24 @@ export interface TheHiveJob {
   observableId?: string;
 }
 
+export interface TheHiveCaseTemplate {
+  _id: string;
+  _type?: string;
+  _createdBy?: string;
+  _createdAt?: number;
+  _updatedBy?: string;
+  _updatedAt?: number;
+  name: string;
+  displayName?: string;
+  description?: string;
+  severity?: number;
+  tlp?: number;
+  pap?: number;
+  tags?: string[];
+  tasks?: Array<{ title: string; description?: string; order?: number; group?: string }>;
+  customFields?: Record<string, unknown>;
+}
+
 export interface TheHiveStatus {
   versions: {
     Scalligraph: string;

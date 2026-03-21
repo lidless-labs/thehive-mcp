@@ -2,19 +2,21 @@
 
 MCP (Model Context Protocol) server for [TheHive](https://thehive-project.org/) security incident response platform. Lets AI agents create cases, manage alerts, track observables, run Cortex analyzers, and orchestrate incident response workflows.
 
-Tested against **TheHive 5.4.11** with full end-to-end verification.
+Tested against **TheHive 5.4.11** with full end-to-end verification (36 live integration tests).
 
 ## Features
 
-- **29 tools** covering the full TheHive 5 API surface
-- **Case management** - create, list, get, update, search, merge cases
-- **Alert management** - create, list, get, update, promote alerts to cases
+- **35 tools** covering the full TheHive 5 API surface
+- **Case management** - create, list, get, update, close, delete, search, merge cases
+- **Alert management** - create, list, get, update, promote to case, delete alerts
 - **Task management** - create, list, get, update tasks within cases
-- **Observable management** - add, list, get, search observables (IPs, domains, hashes, etc.)
+- **Observable management** - add (single + bulk), list, get, search observables
 - **Task logs** - add and list log entries on tasks
 - **Comments** - add and list comments on cases
 - **User management** - list users, get current user info
 - **Cortex integration** - list analyzers, run analyzer jobs, get job results
+- **Raw query API** - execute arbitrary TheHive Query DSL for complex searches
+- **Case templates** - list available templates for case creation
 - **Status** - health check, version info, capabilities
 - **3 prompt templates** - case summary, alert triage, incident response workflow
 - **3 resources** - open cases, new alerts, current user
@@ -85,7 +87,7 @@ Add to `openclaw.json`:
 
 ## Tools
 
-### Cases (6 tools)
+### Cases (8 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -94,9 +96,11 @@ Add to `openclaw.json`:
 | `thehive_create_case` | Create a new case |
 | `thehive_update_case` | Update case fields (severity, status, tags, etc.) |
 | `thehive_search_cases` | Search cases by title keyword |
+| `thehive_close_case` | Close a case with resolution status and summary |
+| `thehive_delete_case` | Permanently delete a case (with optional force) |
 | `thehive_merge_cases` | Merge multiple cases into one |
 
-### Alerts (5 tools)
+### Alerts (6 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -105,6 +109,7 @@ Add to `openclaw.json`:
 | `thehive_create_alert` | Create a new alert |
 | `thehive_update_alert` | Update alert fields |
 | `thehive_promote_alert` | Promote an alert to a case |
+| `thehive_delete_alert` | Permanently delete an alert |
 
 ### Tasks (4 tools)
 
@@ -115,13 +120,14 @@ Add to `openclaw.json`:
 | `thehive_create_task` | Create a task in a case |
 | `thehive_update_task` | Update task fields (status, assignee, etc.) |
 
-### Observables (4 tools)
+### Observables (5 tools)
 
 | Tool | Description |
 |------|-------------|
 | `thehive_list_observables` | List observables for a case |
 | `thehive_get_observable` | Get a specific observable by ID |
-| `thehive_create_observable` | Add an observable to a case (IP, domain, hash, URL, etc.) |
+| `thehive_create_observable` | Add a single observable to a case |
+| `thehive_create_observable_bulk` | Add multiple observables of the same type in one request |
 | `thehive_search_observables` | Search observables across all cases |
 
 ### Task Logs (2 tools)
@@ -152,6 +158,18 @@ Add to `openclaw.json`:
 | `thehive_list_analyzers` | List available Cortex analyzers |
 | `thehive_run_analyzer` | Run a Cortex analyzer on an observable |
 | `thehive_get_job` | Get analyzer job status and results |
+
+### Query (1 tool)
+
+| Tool | Description |
+|------|-------------|
+| `thehive_query` | Execute raw TheHive Query DSL for complex searches, date ranges, counting, etc. |
+
+### Templates (1 tool)
+
+| Tool | Description |
+|------|-------------|
+| `thehive_list_case_templates` | List available case templates |
 
 ### Status (1 tool)
 
@@ -184,10 +202,10 @@ npm install
 # Build
 npm run build
 
-# Run tests (unit)
+# Run tests (unit, 68 tests)
 npm test
 
-# Run live integration tests
+# Run live integration tests (36 tests, requires TheHive instance)
 THEHIVE_URL=http://your-thehive:9000 THEHIVE_API_KEY=your-key npx tsx scripts/live-test.ts
 
 # Type check
@@ -200,9 +218,11 @@ THEHIVE_URL=http://your-thehive:9000 THEHIVE_API_KEY=your-key npm run dev
 ## TheHive 5 Notes
 
 - **Organizations matter.** The `admin` org only has platform permissions. Create a separate org (e.g. "SOC") with an `org-admin` user for full case/alert/task/observable access.
+- **Case statuses changed in v5.** Closed statuses are: TruePositive, FalsePositive, Indeterminate, Duplicated, Other. There is no "Resolved" status.
 - **PATCH returns 204.** Update operations return no body; the client re-fetches the entity automatically.
-- **Observable creation returns arrays.** The client handles this transparently.
+- **Observable creation returns arrays.** The client handles this transparently. Bulk creation uses `data` as an array.
 - **Cortex connector endpoints** live under `/api/connector/` not `/api/v1/`.
+- **`description` is required** when creating cases and alerts.
 
 ## License
 

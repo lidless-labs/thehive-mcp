@@ -11,6 +11,8 @@ import { registerCommentTools } from "./tools/comments.js";
 import { registerUserTools } from "./tools/users.js";
 import { registerCortexTools } from "./tools/cortex.js";
 import { registerStatusTools } from "./tools/status.js";
+import { registerQueryTools } from "./tools/query.js";
+import { registerTemplateTools } from "./tools/templates.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts.js";
 
@@ -39,6 +41,8 @@ async function main(): Promise<void> {
   registerUserTools(server, client);
   registerCortexTools(server, client);
   registerStatusTools(server, client);
+  registerQueryTools(server, client);
+  registerTemplateTools(server, client);
   registerResources(server, client);
   registerPrompts(server);
 

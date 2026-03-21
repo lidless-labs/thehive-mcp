@@ -13,7 +13,7 @@ export function registerCaseTools(
       status: z
         .string()
         .optional()
-        .describe("Filter by status: New, InProgress, Resolved, Deleted"),
+        .describe("Filter by status: New, InProgress, TruePositive, FalsePositive, Indeterminate, Duplicated, Other"),
       severity: z
         .number()
         .int()
@@ -213,7 +213,7 @@ export function registerCaseTools(
       status: z
         .string()
         .optional()
-        .describe("New status: New, InProgress, Resolved, Deleted"),
+        .describe("New status: New, InProgress, TruePositive, FalsePositive, Indeterminate, Duplicated, Other"),
       summary: z.string().optional().describe("Case summary/conclusion"),
       owner: z.string().optional().describe("New case owner"),
       impactStatus: z
@@ -281,6 +281,86 @@ export function registerCaseTools(
             {
               type: "text" as const,
               text: `Error searching cases: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "thehive_close_case",
+    "Close/resolve a case. In TheHive 5, the status field is the resolution status directly.",
+    {
+      caseId: z.string().describe("The case ID to close"),
+      status: z
+        .enum(["TruePositive", "FalsePositive", "Indeterminate", "Duplicated", "Other"])
+        .describe("Resolution status (becomes the case status in TheHive 5)"),
+      impactStatus: z
+        .enum(["NoImpact", "WithImpact", "NotApplicable"])
+        .optional()
+        .describe("Impact status"),
+      summary: z
+        .string()
+        .describe("Case summary/conclusion explaining the resolution"),
+    },
+    async ({ caseId, status, impactStatus, summary }) => {
+      try {
+        const updated = await client.updateCase(caseId, {
+          status,
+          ...(impactStatus && { impactStatus }),
+          summary,
+        });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(updated, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error closing case: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "thehive_delete_case",
+    "Permanently delete a case. Use force=true to delete even if the case has tasks/observables.",
+    {
+      caseId: z.string().describe("The case ID to delete"),
+      force: z
+        .boolean()
+        .optional()
+        .describe("Force delete even if case has children (default: false)"),
+    },
+    async ({ caseId, force }) => {
+      try {
+        await client.deleteCase(caseId, force);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Case ${caseId} deleted successfully`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error deleting case: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
           isError: true,

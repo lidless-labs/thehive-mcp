@@ -268,12 +268,124 @@ async function main(): Promise<void> {
     console.log(`     Promoted alert to case: ${promoted._id}`);
   });
 
+  // --- Bulk Observables ---
+  console.log("\n📦 Bulk Observables");
+  await test("createObservableBulk (3 IPs)", async () => {
+    const obs = await client.createObservableBulk(testCaseId, {
+      dataType: "ip",
+      data: ["172.16.0.1", "172.16.0.2", "172.16.0.3"],
+      message: "Bulk test IPs from MCP",
+      tags: ["mcp-test", "bulk"],
+      ioc: true,
+    });
+    assert(obs.length === 3, `Expected 3 observables, got ${obs.length}`);
+    console.log(`     Created ${obs.length} observables in one request`);
+  });
+
+  // --- Raw Query ---
+  console.log("\n🔎 Raw Query");
+  await test("rawQuery (count cases)", async () => {
+    const result = await client.rawQuery(
+      [{ _name: "listCase" }, { _name: "count" }],
+    );
+    assert(result !== undefined, "No result from count query");
+    console.log(`     Query result: ${JSON.stringify(result)}`);
+  });
+
+  await test("rawQuery (cases by severity)", async () => {
+    const result = await client.rawQuery(
+      [
+        { _name: "listCase" },
+        { _name: "filter", _field: "severity", _value: 1 },
+      ],
+      { range: "0-5", sort: ["-_createdAt"] },
+    );
+    assert(Array.isArray(result), "Expected array result");
+    console.log(`     Found ${result.length} severity-1 cases`);
+  });
+
+  // --- Case Templates ---
+  console.log("\n📋 Case Templates");
+  await test("listCaseTemplates", async () => {
+    const templates = await client.listCaseTemplates();
+    console.log(`     Found ${templates.length} templates (0 is OK if none created)`);
+  });
+
   // --- Cortex ---
   console.log("\n🧠 Cortex");
   await test("listAnalyzers", async () => {
     const analyzers = await client.listAnalyzers();
     console.log(`     Found ${analyzers.length} analyzers (0 is OK if none configured)`);
     // Not asserting length > 0 since Cortex may not have analyzers configured
+  });
+
+  // --- Close Case ---
+  console.log("\n🔒 Close Case");
+  await test("close case (via updateCase)", async () => {
+    // Create a throwaway case to close
+    const closeCase = await client.createCase({
+      title: "[MCP-TEST] Close Test",
+      description: "Case for testing close/resolve workflow",
+      severity: 1,
+      tags: ["mcp-test"],
+    });
+    // TheHive 5: status IS the resolution (FalsePositive, TruePositive, etc.)
+    const closed = await client.updateCase(closeCase._id, {
+      status: "FalsePositive",
+      impactStatus: "NoImpact",
+      summary: "Test closure from MCP integration test",
+    });
+    assert(closed.status === "FalsePositive", `Expected FalsePositive, got ${closed.status}`);
+    console.log(`     Closed case ${closeCase._id} as FalsePositive`);
+    // Clean up
+    await client.deleteCase(closeCase._id);
+  });
+
+  // --- Delete ---
+  console.log("\n🗑️  Delete");
+  await test("deleteAlert", async () => {
+    const a = await client.createAlert({
+      title: "[MCP-TEST] Delete Me",
+      description: "Alert for testing delete",
+      type: "mcp-test",
+      source: "integration-test",
+      sourceRef: `del-${Date.now()}`,
+      severity: 1,
+      tags: ["mcp-test"],
+    });
+    await client.deleteAlert(a._id);
+    // Verify it's gone
+    try {
+      await client.getAlert(a._id);
+      throw new Error("Alert should have been deleted");
+    } catch (err) {
+      assert(
+        err instanceof Error && err.message.includes("not found"),
+        "Expected not found error",
+      );
+    }
+    console.log(`     Deleted alert ${a._id} (verified gone)`);
+  });
+
+  await test("deleteCase", async () => {
+    const c = await client.createCase({
+      title: "[MCP-TEST] Delete Me",
+      description: "Case for testing delete",
+      severity: 1,
+      tags: ["mcp-test"],
+    });
+    await client.deleteCase(c._id);
+    // Verify it's gone
+    try {
+      await client.getCase(c._id);
+      throw new Error("Case should have been deleted");
+    } catch (err) {
+      assert(
+        err instanceof Error && err.message.includes("not found"),
+        "Expected not found error",
+      );
+    }
+    console.log(`     Deleted case ${c._id} (verified gone)`);
   });
 
   // --- Case Merge ---

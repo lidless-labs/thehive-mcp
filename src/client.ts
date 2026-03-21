@@ -10,6 +10,7 @@ import type {
   TheHiveAnalyzer,
   TheHiveJob,
   TheHiveStatus,
+  TheHiveCaseTemplate,
 } from "./types.js";
 
 export class TheHiveClient {
@@ -215,6 +216,13 @@ export class TheHiveClient {
     });
   }
 
+  async deleteCase(caseId: string, force?: boolean): Promise<void> {
+    const path = force
+      ? `/case/${encodeURIComponent(caseId)}/force`
+      : `/case/${encodeURIComponent(caseId)}`;
+    await this.request<Record<string, never>>(path, { method: "DELETE" });
+  }
+
   async mergeCases(caseIds: string[]): Promise<TheHiveCase> {
     return this.request<TheHiveCase>("/case/_merge", {
       method: "POST",
@@ -307,6 +315,13 @@ export class TheHiveClient {
       },
     );
     return this.getAlert(alertId);
+  }
+
+  async deleteAlert(alertId: string): Promise<void> {
+    await this.request<Record<string, never>>(
+      `/alert/${encodeURIComponent(alertId)}`,
+      { method: "DELETE" },
+    );
   }
 
   async promoteAlert(alertId: string): Promise<TheHiveCase> {
@@ -446,6 +461,31 @@ export class TheHiveClient {
     return Array.isArray(result) ? result[0] : result;
   }
 
+  async createObservableBulk(
+    caseId: string,
+    data: {
+      dataType: string;
+      data: string[];
+      message?: string;
+      tags?: string[];
+      tlp?: number;
+      pap?: number;
+      ioc?: boolean;
+      sighted?: boolean;
+      ignoreSimilarity?: boolean;
+    },
+  ): Promise<TheHiveObservable[]> {
+    // TheHive 5 supports data as array for bulk creation
+    const result = await this.request<TheHiveObservable[]>(
+      `/case/${encodeURIComponent(caseId)}/observable`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    );
+    return Array.isArray(result) ? result : [result];
+  }
+
   async searchObservables(
     filters: {
       dataType?: string;
@@ -559,6 +599,39 @@ export class TheHiveClient {
 
   async getCurrentUser(): Promise<TheHiveUser> {
     return this.request<TheHiveUser>("/user/current");
+  }
+
+  // --- Templates ---
+
+  async listCaseTemplates(limit: number = 100): Promise<TheHiveCaseTemplate[]> {
+    const queryFilters: Record<string, unknown>[] = [
+      { _name: "listCaseTemplate" },
+    ];
+
+    const clampedLimit = Math.min(Math.max(limit, 1), 500);
+    return this.query<TheHiveCaseTemplate>("case-templates", queryFilters, {
+      range: `0-${clampedLimit}`,
+      sort: ["name"],
+    });
+  }
+
+  // --- Raw Query ---
+
+  async rawQuery(
+    queryFilters: Record<string, unknown>[],
+    options: { range?: string; sort?: string[]; name?: string } = {},
+  ): Promise<unknown[]> {
+    const body: Record<string, unknown> = {
+      query: queryFilters,
+    };
+    if (options.range) body.range = options.range;
+    if (options.sort) body.sort = options.sort;
+
+    const nameParam = options.name ? `?name=${encodeURIComponent(options.name)}` : "";
+    return this.request<unknown[]>(`/query${nameParam}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   }
 
   // --- Cortex ---

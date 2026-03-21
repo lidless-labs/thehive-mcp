@@ -273,4 +273,35 @@ export function registerAlertTools(
       }
     },
   );
+
+  server.tool(
+    "thehive_delete_alert",
+    "Permanently delete an alert",
+    {
+      alertId: z.string().describe("The alert ID to delete"),
+    },
+    async ({ alertId }) => {
+      try {
+        await client.deleteAlert(alertId);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Alert ${alertId} deleted successfully`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error deleting alert: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
 }

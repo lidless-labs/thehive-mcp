@@ -193,6 +193,95 @@ export function registerObservableTools(
   );
 
   server.tool(
+    "thehive_create_observable_bulk",
+    "Add multiple observables of the same type to a case in one request. More efficient than creating one at a time.",
+    {
+      caseId: z.string().describe("The case ID to add observables to"),
+      dataType: z
+        .enum([
+          "ip",
+          "domain",
+          "url",
+          "mail",
+          "hash",
+          "filename",
+          "fqdn",
+          "user-agent",
+          "regexp",
+          "other",
+        ])
+        .describe("Observable data type (all items must be the same type)"),
+      data: z
+        .array(z.string())
+        .min(1)
+        .max(100)
+        .describe("Array of observable values (e.g. multiple IPs, domains, or hashes)"),
+      message: z
+        .string()
+        .optional()
+        .describe("Description or context for all observables"),
+      tags: z
+        .array(z.string())
+        .optional()
+        .describe("Tags to apply to all observables"),
+      tlp: z
+        .number()
+        .int()
+        .min(0)
+        .max(3)
+        .optional()
+        .describe("TLP level for all observables"),
+      pap: z
+        .number()
+        .int()
+        .min(0)
+        .max(3)
+        .optional()
+        .describe("PAP level for all observables"),
+      ioc: z
+        .boolean()
+        .optional()
+        .describe("Mark all as IOCs (default: false)"),
+      sighted: z
+        .boolean()
+        .optional()
+        .describe("Mark all as sighted (default: false)"),
+    },
+    async ({ caseId, dataType, data, message, tags, tlp, pap, ioc, sighted }) => {
+      try {
+        const created = await client.createObservableBulk(caseId, {
+          dataType,
+          data,
+          message,
+          tags,
+          tlp,
+          pap,
+          ioc,
+          sighted,
+        });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(created, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error creating observables: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
     "thehive_search_observables",
     "Search observables across all cases",
     {
