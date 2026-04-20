@@ -46,14 +46,13 @@ Set environment variables:
 
 ### Claude Desktop
 
-Add to `claude_desktop_config.json`:
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ```json
 {
   "mcpServers": {
     "thehive": {
-      "command": "npx",
-      "args": ["-y", "thehive-mcp"],
+      "command": "thehive-mcp",
       "env": {
         "THEHIVE_URL": "http://your-thehive:9000",
         "THEHIVE_API_KEY": "your-api-key"
@@ -63,26 +62,106 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
+### Claude Code
+
+```bash
+claude mcp add thehive \
+  --env THEHIVE_URL=http://your-thehive:9000 \
+  --env THEHIVE_API_KEY=your-api-key \
+  -- thehive-mcp
+```
+
+Add `--scope user` to make it available from any directory instead of only the current project.
+
 ### OpenClaw
 
-Add to `openclaw.json`:
+If you're running from a source checkout instead of the npm-installed binary, point `command`/`args` at the built `dist/index.js`:
 
-```json
-{
-  "mcp": {
-    "servers": {
-      "thehive": {
-        "type": "stdio",
-        "command": "npx",
-        "args": ["-y", "thehive-mcp"],
-        "env": {
-          "THEHIVE_URL": "http://your-thehive:9000",
-          "THEHIVE_API_KEY": "your-api-key"
-        }
-      }
-    }
+```bash
+openclaw mcp set thehive '{
+  "command": "node",
+  "args": ["/absolute/path/to/thehive-mcp/dist/index.js"],
+  "env": {
+    "THEHIVE_URL": "http://your-thehive:9000",
+    "THEHIVE_API_KEY": "your-api-key"
   }
-}
+}'
+```
+
+Or, with the global npm install:
+
+```bash
+openclaw mcp set thehive '{
+  "command": "thehive-mcp",
+  "env": {
+    "THEHIVE_URL": "http://your-thehive:9000",
+    "THEHIVE_API_KEY": "your-api-key"
+  }
+}'
+```
+
+Then restart the OpenClaw gateway so the new server is picked up:
+
+```bash
+systemctl --user restart openclaw-gateway
+openclaw mcp list   # confirm "thehive" is registered
+```
+
+### Hermes Agent
+
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) reads MCP config from `~/.hermes/config.yaml` under the `mcp_servers` key. Add an entry:
+
+```yaml
+mcp_servers:
+  thehive:
+    command: "thehive-mcp"
+    env:
+      THEHIVE_URL: "http://your-thehive:9000"
+      THEHIVE_API_KEY: "your-api-key"
+```
+
+Or, when running from a source checkout instead of the global npm install:
+
+```yaml
+mcp_servers:
+  thehive:
+    command: "node"
+    args: ["/absolute/path/to/thehive-mcp/dist/index.js"]
+    env:
+      THEHIVE_URL: "http://your-thehive:9000"
+      THEHIVE_API_KEY: "your-api-key"
+```
+
+Then reload MCP from inside a Hermes session:
+
+```
+/reload-mcp
+```
+
+### Codex CLI
+
+[Codex CLI](https://github.com/openai/codex) registers MCP servers via `codex mcp add`:
+
+```bash
+codex mcp add thehive \
+  --env THEHIVE_URL=http://your-thehive:9000 \
+  --env THEHIVE_API_KEY=your-api-key \
+  -- thehive-mcp
+```
+
+Or, when running from a source checkout:
+
+```bash
+codex mcp add thehive \
+  --env THEHIVE_URL=http://your-thehive:9000 \
+  --env THEHIVE_API_KEY=your-api-key \
+  -- node /absolute/path/to/thehive-mcp/dist/index.js
+```
+
+Codex writes the entry to `~/.codex/config.toml` under `[mcp_servers.thehive]`. Verify with:
+
+```bash
+codex mcp list
 ```
 
 ## Tools
