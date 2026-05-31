@@ -20,7 +20,7 @@ Tested against **TheHive 5.4.11** with live integration coverage for read, write
 
 ## Features
 
-- **43 tools** covering the full TheHive 5 API surface
+- **47 tools** covering the full TheHive 5 API surface
 - **Case management** - create, list, get, update, assign, close, delete, search, merge, tag, flag, bulk update, summarize cases, update custom fields
 - **Alert management** - create, list, get, update, promote to case, delete alerts
 - **Task management** - create, list, get, update tasks within cases
@@ -28,7 +28,7 @@ Tested against **TheHive 5.4.11** with live integration coverage for read, write
 - **Task logs** - add and list log entries on tasks
 - **Comments** - add and list comments on cases
 - **User management** - list users, get current user info
-- **Cortex integration** - list analyzers, run analyzer jobs, get job results
+- **Cortex integration** - list analyzers, run and poll jobs, summarize reports, find observable enrichment options
 - **Raw query API** - execute guarded TheHive Query DSL for complex searches
 - **Case templates** - list available templates for case creation
 - **Status** - health check, version info, capabilities
@@ -254,13 +254,17 @@ codex mcp list
 | `thehive_list_users` | List users in the organization |
 | `thehive_get_current_user` | Get the authenticated user's profile |
 
-### Cortex (3 tools)
+### Cortex (7 tools)
 
 | Tool | Description |
 |------|-------------|
 | `thehive_list_analyzers` | List available Cortex analyzers |
+| `thehive_get_observable_enrichment_options` | List analyzers that can enrich an observable |
 | `thehive_run_analyzer` | Run a Cortex analyzer on an observable |
+| `thehive_run_analyzer_and_wait` | Run an analyzer and wait for completion |
 | `thehive_get_job` | Get analyzer job status and results |
+| `thehive_wait_for_job` | Poll a job until it reaches a terminal status |
+| `thehive_summarize_job_report` | Return a compact analyzer report summary |
 
 ### Query (1 tool)
 

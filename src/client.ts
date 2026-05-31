@@ -738,6 +738,27 @@ export class TheHiveClient {
     );
   }
 
+  async waitForJob(
+    jobId: string,
+    options: { maxAttempts?: number; intervalMs?: number } = {},
+  ): Promise<TheHiveJob> {
+    const maxAttempts = Math.min(Math.max(options.maxAttempts ?? 20, 1), 60);
+    const intervalMs = Math.min(Math.max(options.intervalMs ?? 2000, 100), 10000);
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const job = await this.getJob(jobId);
+      if (isTerminalJobStatus(job.status)) {
+        return job;
+      }
+
+      if (attempt < maxAttempts) {
+        await sleep(intervalMs);
+      }
+    }
+
+    throw new Error(`Cortex job ${jobId} did not complete after ${maxAttempts} attempts`);
+  }
+
   // --- Status ---
 
   async getStatus(): Promise<TheHiveStatus> {
@@ -793,4 +814,16 @@ function normalizeQueryName(name: string): string {
     throw new Error("Query name must be a non-empty string up to 100 characters");
   }
   return normalized;
+}
+
+function isTerminalJobStatus(status: string | undefined): boolean {
+  if (!status) {
+    return false;
+  }
+
+  return ["success", "failure", "error", "deleted"].includes(status.toLowerCase());
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }

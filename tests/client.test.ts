@@ -493,6 +493,31 @@ describe("TheHiveClient", () => {
     });
   });
 
+  describe("cortex", () => {
+    it("should wait for a completed Cortex job", async () => {
+      const job = { _id: "~job1", status: "Success", report: { summary: "clean" } };
+      globalThis.fetch = mockFetch(job);
+
+      const result = await client.waitForJob("~job1", {
+        maxAttempts: 1,
+        intervalMs: 100,
+      });
+
+      expect(result).toEqual(job);
+      const [url] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+        .calls[0];
+      expect(url).toBe("https://thehive.example.com/api/connector/cortex/job/~job1");
+    });
+
+    it("should fail when a Cortex job does not complete in time", async () => {
+      globalThis.fetch = mockFetch({ _id: "~job1", status: "InProgress" });
+
+      await expect(
+        client.waitForJob("~job1", { maxAttempts: 1, intervalMs: 100 }),
+      ).rejects.toThrow("did not complete");
+    });
+  });
+
   describe("status", () => {
     it("should fetch status without authentication headers", async () => {
       globalThis.fetch = mockFetch({
