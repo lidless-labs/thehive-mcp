@@ -7,6 +7,8 @@ const mockConfig: TheHiveConfig = {
   apiKey: "test-api-key-123",
   verifySsl: true,
   timeout: 30000,
+  allowDestructiveTools: false,
+  enableRawQuery: false,
 };
 
 describe("TheHiveClient handler behavior", () => {

@@ -1,16 +1,27 @@
 /**
  * Live integration test against a real TheHive instance.
- * Usage: THEHIVE_URL=http://... THEHIVE_API_KEY=... npx tsx scripts/live-test.ts
+ * Usage:
+ *   THEHIVE_URL=http://... THEHIVE_API_KEY=... npx tsx scripts/live-test.ts
+ *   THEHIVE_URL=http://... THEHIVE_API_KEY=... THEHIVE_LIVE_ALLOW_WRITES=true npx tsx scripts/live-test.ts
+ *   THEHIVE_URL=http://... THEHIVE_API_KEY=... THEHIVE_LIVE_ALLOW_WRITES=true THEHIVE_LIVE_ALLOW_DESTRUCTIVE=true npx tsx scripts/live-test.ts
  */
 
 import { TheHiveClient } from "../src/client.js";
 import { getConfig } from "../src/config.js";
 
+if (!process.env.THEHIVE_URL?.trim() || !process.env.THEHIVE_API_KEY?.trim()) {
+  console.log("Skipping live tests: THEHIVE_URL and THEHIVE_API_KEY are not set.");
+  process.exit(0);
+}
+
 const config = getConfig();
 const client = new TheHiveClient(config);
+const allowWrites = parseBooleanFlag(process.env.THEHIVE_LIVE_ALLOW_WRITES);
+const allowDestructive = parseBooleanFlag(process.env.THEHIVE_LIVE_ALLOW_DESTRUCTIVE);
 
 let passed = 0;
 let failed = 0;
+let skipped = 0;
 
 async function test(name: string, fn: () => Promise<void>): Promise<void> {
   try {
@@ -23,12 +34,35 @@ async function test(name: string, fn: () => Promise<void>): Promise<void> {
   }
 }
 
+function skip(name: string, reason: string): void {
+  console.log(`  ⏭️  ${name}: ${reason}`);
+  skipped++;
+}
+
 function assert(condition: boolean, msg: string): void {
   if (!condition) throw new Error(msg);
 }
 
+function parseBooleanFlag(value: string | undefined): boolean {
+  return value?.trim().toLowerCase() === "true";
+}
+
+function printSummary(): void {
+  console.log(`\n${"─".repeat(50)}`);
+  console.log(`Results: ${passed} passed, ${failed} failed, ${skipped} skipped (${passed + failed + skipped} total)`);
+  console.log(`${"─".repeat(50)}\n`);
+}
+
+function finish(): void {
+  printSummary();
+  if (failed > 0) {
+    process.exit(1);
+  }
+}
+
 async function main(): Promise<void> {
   console.log(`\nLive test against ${config.url}\n`);
+  console.log(`Writes: ${allowWrites ? "enabled" : "disabled"}; destructive cleanup: ${allowDestructive ? "enabled" : "disabled"}\n`);
 
   // --- Status ---
   console.log("📡 Status");
@@ -40,9 +74,11 @@ async function main(): Promise<void> {
 
   // --- Users ---
   console.log("\n👤 Users");
+  let currentUserLogin = "";
   await test("getCurrentUser returns admin", async () => {
     const user = await client.getCurrentUser();
     assert(!!user.login, "No login returned");
+    currentUserLogin = user.login;
     console.log(`     Logged in as: ${user.login} (${user.profile})`);
   });
 
@@ -51,6 +87,49 @@ async function main(): Promise<void> {
     assert(users.length >= 1, "Expected at least 1 user");
     console.log(`     Found ${users.length} users`);
   });
+
+  // --- Read-only smoke checks ---
+  console.log("\n🔎 Read-only Checks");
+  await test("listCases", async () => {
+    const cases = await client.listCases({ limit: 5 });
+    console.log(`     Found ${cases.length} cases`);
+  });
+
+  await test("rawQuery (count cases)", async () => {
+    const result = await client.rawQuery(
+      [{ _name: "listCase" }, { _name: "count" }],
+    );
+    assert(result !== undefined, "No result from count query");
+    console.log(`     Query result: ${JSON.stringify(result)}`);
+  });
+
+  await test("rawQuery guardrails reject invalid range", async () => {
+    try {
+      await client.rawQuery([{ _name: "listCase" }], { range: "all" });
+      throw new Error("Expected invalid range to fail");
+    } catch (err) {
+      assert(
+        err instanceof Error && err.message.includes("start-end"),
+        "Expected local range validation error",
+      );
+    }
+  });
+
+  await test("listCaseTemplates", async () => {
+    const templates = await client.listCaseTemplates();
+    console.log(`     Found ${templates.length} templates (0 is OK if none created)`);
+  });
+
+  await test("listAnalyzers", async () => {
+    const analyzers = await client.listAnalyzers();
+    console.log(`     Found ${analyzers.length} analyzers (0 is OK if none configured)`);
+  });
+
+  if (!allowWrites) {
+    skip("write workflow tests", "set THEHIVE_LIVE_ALLOW_WRITES=true to create and update test data");
+    finish();
+    return;
+  }
 
   // --- Cases ---
   console.log("\n📁 Cases");
@@ -83,6 +162,25 @@ async function main(): Promise<void> {
     });
     assert(c._id === testCaseId, "Wrong case returned");
   });
+
+  await test("assign case (via updateCase owner)", async () => {
+    const c = await client.updateCase(testCaseId, {
+      owner: currentUserLogin,
+    });
+    assert(c._id === testCaseId, "Wrong case returned");
+  });
+
+  if (process.env.THEHIVE_LIVE_CUSTOM_FIELD?.trim()) {
+    await test("updateCase customFields", async () => {
+      const fieldName = process.env.THEHIVE_LIVE_CUSTOM_FIELD?.trim() ?? "";
+      const c = await client.updateCase(testCaseId, {
+        customFields: { [fieldName]: "thehive-mcp-live-test" },
+      });
+      assert(c._id === testCaseId, "Wrong case returned");
+    });
+  } else {
+    skip("updateCase customFields", "set THEHIVE_LIVE_CUSTOM_FIELD to a configured TheHive custom field name");
+  }
 
   await test("listCases", async () => {
     const cases = await client.listCases({ limit: 5 });
@@ -284,14 +382,6 @@ async function main(): Promise<void> {
 
   // --- Raw Query ---
   console.log("\n🔎 Raw Query");
-  await test("rawQuery (count cases)", async () => {
-    const result = await client.rawQuery(
-      [{ _name: "listCase" }, { _name: "count" }],
-    );
-    assert(result !== undefined, "No result from count query");
-    console.log(`     Query result: ${JSON.stringify(result)}`);
-  });
-
   await test("rawQuery (cases by severity)", async () => {
     const result = await client.rawQuery(
       [
@@ -306,18 +396,11 @@ async function main(): Promise<void> {
 
   // --- Case Templates ---
   console.log("\n📋 Case Templates");
-  await test("listCaseTemplates", async () => {
-    const templates = await client.listCaseTemplates();
-    console.log(`     Found ${templates.length} templates (0 is OK if none created)`);
-  });
+  skip("listCaseTemplates", "already covered by read-only checks");
 
   // --- Cortex ---
   console.log("\n🧠 Cortex");
-  await test("listAnalyzers", async () => {
-    const analyzers = await client.listAnalyzers();
-    console.log(`     Found ${analyzers.length} analyzers (0 is OK if none configured)`);
-    // Not asserting length > 0 since Cortex may not have analyzers configured
-  });
+  skip("listAnalyzers", "already covered by read-only checks");
 
   // --- Close Case ---
   console.log("\n🔒 Close Case");
@@ -337,85 +420,91 @@ async function main(): Promise<void> {
     });
     assert(closed.status === "FalsePositive", `Expected FalsePositive, got ${closed.status}`);
     console.log(`     Closed case ${closeCase._id} as FalsePositive`);
-    // Clean up
-    await client.deleteCase(closeCase._id);
+    if (allowDestructive) {
+      await client.deleteCase(closeCase._id);
+    } else {
+      console.log(`     Cleanup skipped for ${closeCase._id}; set THEHIVE_LIVE_ALLOW_DESTRUCTIVE=true to delete test data`);
+    }
   });
 
   // --- Delete ---
   console.log("\n🗑️  Delete");
-  await test("deleteAlert", async () => {
-    const a = await client.createAlert({
-      title: "[MCP-TEST] Delete Me",
-      description: "Alert for testing delete",
-      type: "mcp-test",
-      source: "integration-test",
-      sourceRef: `del-${Date.now()}`,
-      severity: 1,
-      tags: ["mcp-test"],
+  if (allowDestructive) {
+    await test("deleteAlert", async () => {
+      const a = await client.createAlert({
+        title: "[MCP-TEST] Delete Me",
+        description: "Alert for testing delete",
+        type: "mcp-test",
+        source: "integration-test",
+        sourceRef: `del-${Date.now()}`,
+        severity: 1,
+        tags: ["mcp-test"],
+      });
+      await client.deleteAlert(a._id);
+      // Verify it's gone
+      try {
+        await client.getAlert(a._id);
+        throw new Error("Alert should have been deleted");
+      } catch (err) {
+        assert(
+          err instanceof Error && err.message.includes("not found"),
+          "Expected not found error",
+        );
+      }
+      console.log(`     Deleted alert ${a._id} (verified gone)`);
     });
-    await client.deleteAlert(a._id);
-    // Verify it's gone
-    try {
-      await client.getAlert(a._id);
-      throw new Error("Alert should have been deleted");
-    } catch (err) {
-      assert(
-        err instanceof Error && err.message.includes("not found"),
-        "Expected not found error",
-      );
-    }
-    console.log(`     Deleted alert ${a._id} (verified gone)`);
-  });
 
-  await test("deleteCase", async () => {
-    const c = await client.createCase({
-      title: "[MCP-TEST] Delete Me",
-      description: "Case for testing delete",
-      severity: 1,
-      tags: ["mcp-test"],
+    await test("deleteCase", async () => {
+      const c = await client.createCase({
+        title: "[MCP-TEST] Delete Me",
+        description: "Case for testing delete",
+        severity: 1,
+        tags: ["mcp-test"],
+      });
+      await client.deleteCase(c._id);
+      // Verify it's gone
+      try {
+        await client.getCase(c._id);
+        throw new Error("Case should have been deleted");
+      } catch (err) {
+        assert(
+          err instanceof Error && err.message.includes("not found"),
+          "Expected not found error",
+        );
+      }
+      console.log(`     Deleted case ${c._id} (verified gone)`);
     });
-    await client.deleteCase(c._id);
-    // Verify it's gone
-    try {
-      await client.getCase(c._id);
-      throw new Error("Case should have been deleted");
-    } catch (err) {
-      assert(
-        err instanceof Error && err.message.includes("not found"),
-        "Expected not found error",
-      );
-    }
-    console.log(`     Deleted case ${c._id} (verified gone)`);
-  });
+  } else {
+    skip("deleteAlert", "set THEHIVE_LIVE_ALLOW_DESTRUCTIVE=true to delete test data");
+    skip("deleteCase", "set THEHIVE_LIVE_ALLOW_DESTRUCTIVE=true to delete test data");
+  }
 
   // --- Case Merge ---
   console.log("\n🔀 Case Merge");
-  await test("mergeCases", async () => {
-    // Create a second case to merge with
-    const c2 = await client.createCase({
-      title: "[MCP-TEST] Merge Target",
-      description: "Case to merge",
-      severity: 1,
-      tags: ["mcp-test"],
+  if (allowDestructive) {
+    await test("mergeCases", async () => {
+      // Create a second case to merge with
+      const c2 = await client.createCase({
+        title: "[MCP-TEST] Merge Target",
+        description: "Case to merge",
+        severity: 1,
+        tags: ["mcp-test"],
+      });
+      try {
+        const merged = await client.mergeCases([testCaseId, c2._id]);
+        assert(!!merged._id, "No _id from merge");
+        console.log(`     Merged into: ${merged._id}`);
+      } catch (err) {
+        // Merge may fail if cases are in wrong state, that's OK
+        console.log(`     Merge skipped (expected in some configs): ${err instanceof Error ? err.message : err}`);
+      }
     });
-    try {
-      const merged = await client.mergeCases([testCaseId, c2._id]);
-      assert(!!merged._id, "No _id from merge");
-      console.log(`     Merged into: ${merged._id}`);
-    } catch (err) {
-      // Merge may fail if cases are in wrong state, that's OK
-      console.log(`     Merge skipped (expected in some configs): ${err instanceof Error ? err.message : err}`);
-    }
-  });
+  } else {
+    skip("mergeCases", "set THEHIVE_LIVE_ALLOW_DESTRUCTIVE=true to merge test data");
+  }
 
   // --- Summary ---
-  console.log(`\n${"─".repeat(50)}`);
-  console.log(`Results: ${passed} passed, ${failed} failed (${passed + failed} total)`);
-  console.log(`${"─".repeat(50)}\n`);
-
-  if (failed > 0) {
-    process.exit(1);
-  }
+  finish();
 }
 
 main().catch((err) => {

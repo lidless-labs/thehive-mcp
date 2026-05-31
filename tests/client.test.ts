@@ -7,6 +7,8 @@ const mockConfig: TheHiveConfig = {
   apiKey: "test-api-key-123",
   verifySsl: true,
   timeout: 30000,
+  allowDestructiveTools: false,
+  enableRawQuery: false,
 };
 
 function mockFetch(data: unknown, status = 200) {
@@ -116,6 +118,7 @@ describe("TheHiveClient", () => {
         title: "New Incident",
         severity: 2,
         tags: ["test"],
+        customFields: { businessUnit: "finance" },
       });
 
       expect(result).toEqual(created);
@@ -128,6 +131,7 @@ describe("TheHiveClient", () => {
       expect(body.title).toBe("New Incident");
       expect(body.severity).toBe(2);
       expect(body.tags).toEqual(["test"]);
+      expect(body.customFields).toEqual({ businessUnit: "finance" });
     });
 
     it("should update a case", async () => {
@@ -173,6 +177,26 @@ describe("TheHiveClient", () => {
         .mock.calls[0];
       expect(url).toBe("https://thehive.example.com/api/v1/case/_merge");
       expect(JSON.parse(options.body)).toEqual({ caseIds: ["~123", "~456"] });
+    });
+
+    it("should update case custom fields", async () => {
+      const updated = {
+        _id: "~123",
+        title: "Updated",
+        customFields: { businessUnit: "finance" },
+      };
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 204, json: () => Promise.resolve({}), text: () => Promise.resolve("") })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(updated), text: () => Promise.resolve(JSON.stringify(updated)) });
+      globalThis.fetch = fetchMock;
+
+      const result = await client.updateCase("~123", {
+        customFields: { businessUnit: "finance" },
+      });
+
+      expect(result).toEqual(updated);
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.customFields).toEqual({ businessUnit: "finance" });
     });
 
     it("should clamp limit to valid range", async () => {
@@ -438,6 +462,53 @@ describe("TheHiveClient", () => {
     });
   });
 
+  describe("raw query", () => {
+    it("should execute a guarded raw query", async () => {
+      globalThis.fetch = mockFetch([]);
+
+      await client.rawQuery(
+        [{ _name: "listCase" }],
+        { range: "0-1000", sort: ["-_createdAt"], name: "case search" },
+      );
+
+      const [url, options] = (globalThis.fetch as ReturnType<typeof vi.fn>)
+        .mock.calls[0];
+      expect(url).toBe("https://thehive.example.com/api/v1/query?name=case%20search");
+      const body = JSON.parse(options.body);
+      expect(body.query).toEqual([{ _name: "listCase" }]);
+      expect(body.range).toBe("0-500");
+      expect(body.sort).toEqual(["-_createdAt"]);
+    });
+
+    it("should reject non-object raw query entries", async () => {
+      await expect(
+        client.rawQuery([["listCase"] as unknown as Record<string, unknown>]),
+      ).rejects.toThrow("array of filter objects");
+    });
+
+    it("should reject invalid raw query ranges", async () => {
+      await expect(
+        client.rawQuery([{ _name: "listCase" }], { range: "all" }),
+      ).rejects.toThrow("start-end");
+    });
+  });
+
+  describe("status", () => {
+    it("should fetch status without authentication headers", async () => {
+      globalThis.fetch = mockFetch({
+        versions: { Scalligraph: "1", TheHive: "5", Play: "2" },
+        config: {},
+      });
+
+      await client.getStatus();
+
+      const [url, options] = (globalThis.fetch as ReturnType<typeof vi.fn>)
+        .mock.calls[0];
+      expect(url).toBe("https://thehive.example.com/api/status");
+      expect(options.headers).toBeUndefined();
+    });
+  });
+
   describe("error handling", () => {
     it("should throw on 401", async () => {
       globalThis.fetch = mockFetch({ message: "Unauthorized" }, 401);
@@ -445,6 +516,16 @@ describe("TheHiveClient", () => {
       await expect(client.getCase("~1")).rejects.toThrow(
         "authentication failed",
       );
+    });
+
+    it("should redact sensitive error response details", async () => {
+      globalThis.fetch = mockFetch(
+        { message: "Bearer test-api-key-123 token leaked" },
+        500,
+      );
+
+      await expect(client.getCase("~1")).rejects.toThrow("[REDACTED]");
+      await expect(client.getCase("~1")).rejects.not.toThrow("test-api-key-123");
     });
 
     it("should throw on 403", async () => {

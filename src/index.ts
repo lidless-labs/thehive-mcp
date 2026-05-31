@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { getConfig } from "./config.js";
@@ -16,6 +17,10 @@ import { registerTemplateTools } from "./tools/templates.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts.js";
 
+const require = createRequire(import.meta.url);
+const packageJson = require("../package.json") as { version?: string };
+const serverVersion = packageJson.version ?? "0.0.0";
+
 async function main(): Promise<void> {
   const config = getConfig();
 
@@ -25,15 +30,19 @@ async function main(): Promise<void> {
 
   const server = new McpServer({
     name: "thehive-mcp",
-    version: "1.0.0",
+    version: serverVersion,
     description:
       "MCP server for TheHive - security incident response platform. Provides tools for managing cases, alerts, tasks, observables, and incident response workflows.",
   });
 
   const client = new TheHiveClient(config);
 
-  registerCaseTools(server, client);
-  registerAlertTools(server, client);
+  registerCaseTools(server, client, {
+    allowDestructiveTools: config.allowDestructiveTools,
+  });
+  registerAlertTools(server, client, {
+    allowDestructiveTools: config.allowDestructiveTools,
+  });
   registerTaskTools(server, client);
   registerObservableTools(server, client);
   registerTaskLogTools(server, client);
@@ -41,7 +50,9 @@ async function main(): Promise<void> {
   registerUserTools(server, client);
   registerCortexTools(server, client);
   registerStatusTools(server, client);
-  registerQueryTools(server, client);
+  registerQueryTools(server, client, {
+    enableRawQuery: config.enableRawQuery,
+  });
   registerTemplateTools(server, client);
   registerResources(server, client);
   registerPrompts(server);

@@ -31,7 +31,7 @@ if pct status "$CTID" &>/dev/null; then
     echo -e "${RED}Error: CT $CTID exists.${NC}"; exit 1
 fi
 
-read -p "Hostname [thehive-mcp-ts]: " CT_HOSTNAME; CT_HOSTNAME=${CT_HOSTNAME:-thehive-mcp-ts}
+read -p "Hostname [thehive-mcp]: " CT_HOSTNAME; CT_HOSTNAME=${CT_HOSTNAME:-thehive-mcp}
 read -p "Memory MB [2048]: " CT_MEMORY; CT_MEMORY=${CT_MEMORY:-2048}
 read -p "Disk GB [4]: " CT_DISK; CT_DISK=${CT_DISK:-4}
 read -p "CPU cores [1]: " CT_CORES; CT_CORES=${CT_CORES:-1}
@@ -53,8 +53,11 @@ read -p "Storage [local-lvm]: " CT_STORAGE; CT_STORAGE=${CT_STORAGE:-local-lvm}
 # Service config
 echo ""; echo -e "${YELLOW}TheHive MCP Configuration${NC}"
 read -p "THEHIVE_URL: " THEHIVE_URL_VAL
-read -p "THEHIVE_API_KEY: " THEHIVE_API_KEY_VAL
+read -rsp "THEHIVE_API_KEY: " THEHIVE_API_KEY_VAL; echo ""
 read -p "Port [3104]: " MCP_PORT; MCP_PORT=${MCP_PORT:-3104}
+if [[ "$THEHIVE_URL_VAL" == *$'\n'* || "$THEHIVE_API_KEY_VAL" == *$'\n'* ]]; then
+    echo -e "${RED}Error: THEHIVE_URL and THEHIVE_API_KEY must be single-line values.${NC}"; exit 1
+fi
 
 # Template
 echo -e "${YELLOW}Finding Ubuntu template...${NC}"
@@ -92,32 +95,35 @@ pct exec "$CTID" -- bash -c "apt-get update && apt-get install -y nodejs"
 
 # Clone, configure, build
 echo -e "${YELLOW}Setting up TheHive MCP...${NC}"
-pct exec "$CTID" -- bash -c "git clone https://github.com/solomonneas/thehive-mcp-ts.git /opt/thehive-mcp-ts"
-pct exec "$CTID" -- bash -c "cat > /opt/thehive-mcp-ts/.env << 'ENVEOF'
-THEHIVE_URL=$THEHIVE_URL_VAL
-THEHIVE_API_KEY=$THEHIVE_API_KEY_VAL
-PORT=$MCP_PORT
-ENVEOF"
-pct exec "$CTID" -- bash -c "cd /opt/thehive-mcp-ts && npm install && npm run build"
+pct exec "$CTID" -- bash -c "git clone https://github.com/solomonneas/thehive-mcp.git /opt/thehive-mcp"
+pct exec "$CTID" -- env THEHIVE_URL_VAL="$THEHIVE_URL_VAL" THEHIVE_API_KEY_VAL="$THEHIVE_API_KEY_VAL" MCP_PORT="$MCP_PORT" bash -c '
+umask 077
+{
+  printf "THEHIVE_URL=%s\n" "$THEHIVE_URL_VAL"
+  printf "THEHIVE_API_KEY=%s\n" "$THEHIVE_API_KEY_VAL"
+  printf "PORT=%s\n" "$MCP_PORT"
+} > /opt/thehive-mcp/.env
+'
+pct exec "$CTID" -- bash -c "cd /opt/thehive-mcp && npm ci && npm run build && npm prune --omit=dev"
 
 # Systemd service
-pct exec "$CTID" -- bash -c "cat > /etc/systemd/system/thehive-mcp-ts.service << 'SVCEOF'
+pct exec "$CTID" -- bash -c "cat > /etc/systemd/system/thehive-mcp.service << 'SVCEOF'
 [Unit]
 Description=TheHive MCP
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/thehive-mcp-ts
+WorkingDirectory=/opt/thehive-mcp
 ExecStart=/usr/bin/node dist/index.js
 Restart=on-failure
 RestartSec=10
-EnvironmentFile=/opt/thehive-mcp-ts/.env
+EnvironmentFile=/opt/thehive-mcp/.env
 
 [Install]
 WantedBy=multi-user.target
 SVCEOF"
-pct exec "$CTID" -- bash -c "systemctl daemon-reload && systemctl enable thehive-mcp-ts && systemctl start thehive-mcp-ts"
+pct exec "$CTID" -- bash -c "systemctl daemon-reload && systemctl enable thehive-mcp && systemctl start thehive-mcp"
 
 CT_IP=$(pct exec "$CTID" -- hostname -I 2>/dev/null | awk '{print $1}')
 
@@ -132,4 +138,4 @@ echo -e "  Password:  $CT_PASSWORD"
 echo -e "  Port:      $MCP_PORT"
 echo ""
 echo -e "  ${YELLOW}pct enter $CTID${NC}"
-echo -e "  ${YELLOW}pct exec $CTID -- journalctl -u thehive-mcp-ts -f${NC}"
+echo -e "  ${YELLOW}pct exec $CTID -- journalctl -u thehive-mcp -f${NC}"
