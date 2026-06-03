@@ -2,6 +2,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
 
+const taskStatusSchema = z.enum(["Waiting", "InProgress", "Completed", "Cancel"]);
+
 export function registerTaskTools(
   server: McpServer,
   client: TheHiveClient,
@@ -12,7 +14,7 @@ export function registerTaskTools(
     {
       caseId: z.string().describe("The case ID to list tasks for"),
       status: z
-        .string()
+        .enum(taskStatusSchema.options)
         .optional()
         .describe("Filter by status: Waiting, InProgress, Completed, Cancel"),
       assignee: z
@@ -98,7 +100,7 @@ export function registerTaskTools(
         .optional()
         .describe("Task description (supports markdown)"),
       status: z
-        .string()
+        .enum(taskStatusSchema.options)
         .optional()
         .describe("Initial status: Waiting, InProgress (default: Waiting)"),
       flag: z.boolean().optional().describe("Whether to flag the task"),
@@ -162,7 +164,7 @@ export function registerTaskTools(
       title: z.string().optional().describe("New title"),
       description: z.string().optional().describe("New description"),
       status: z
-        .string()
+        .enum(taskStatusSchema.options)
         .optional()
         .describe("New status: Waiting, InProgress, Completed, Cancel"),
       flag: z.boolean().optional().describe("Flag the task"),

@@ -1,10 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
+import { rawQueryDisabled, type ToolSafetyOptions } from "./safety.js";
 
 export function registerQueryTools(
   server: McpServer,
   client: TheHiveClient,
+  options: ToolSafetyOptions = {},
 ): void {
   server.tool(
     "thehive_query",
@@ -23,18 +25,25 @@ Common query filters:
         .describe("JSON array of query filter objects (TheHive Query DSL)"),
       range: z
         .string()
+        .regex(/^\d+-\d+$/)
         .optional()
-        .describe("Result range, e.g. '0-50' (default: '0-100')"),
+        .describe("Result range, e.g. '0-50' (default: '0-100', max 500 results)"),
       sort: z
-        .array(z.string())
+        .array(z.string().trim().min(1).max(100))
         .optional()
         .describe("Sort fields, prefix with '-' for descending (e.g. ['-_createdAt'])"),
       name: z
         .string()
+        .trim()
+        .min(1)
+        .max(100)
         .optional()
         .describe("Query name for caching/debugging"),
     },
     async ({ query: queryStr, range, sort, name }) => {
+      if (!options.enableRawQuery) {
+        return rawQueryDisabled();
+      }
       try {
         const queryFilters = JSON.parse(queryStr) as Record<string, unknown>[];
         if (!Array.isArray(queryFilters)) {

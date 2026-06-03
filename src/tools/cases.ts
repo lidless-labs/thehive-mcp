@@ -1,17 +1,38 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
+import { destructiveToolDisabled, type ToolSafetyOptions } from "./safety.js";
+
+const caseStatusSchema = z.enum([
+  "New",
+  "InProgress",
+  "TruePositive",
+  "FalsePositive",
+  "Indeterminate",
+  "Duplicated",
+  "Other",
+]);
+const resolutionStatusSchema = z.enum([
+  "TruePositive",
+  "FalsePositive",
+  "Indeterminate",
+  "Duplicated",
+  "Other",
+]);
+const impactStatusSchema = z.enum(["NoImpact", "WithImpact", "NotApplicable"]);
+const customFieldsSchema = z.record(z.string(), z.unknown());
 
 export function registerCaseTools(
   server: McpServer,
   client: TheHiveClient,
+  options: ToolSafetyOptions = {},
 ): void {
   server.tool(
     "thehive_list_cases",
     "List cases from TheHive with optional filters",
     {
       status: z
-        .string()
+        .enum(caseStatusSchema.options)
         .optional()
         .describe("Filter by status: New, InProgress, TruePositive, FalsePositive, Indeterminate, Duplicated, Other"),
       severity: z
@@ -145,8 +166,11 @@ export function registerCaseTools(
         .string()
         .optional()
         .describe("Case template name to use"),
+      customFields: customFieldsSchema
+        .optional()
+        .describe("Case custom fields keyed by TheHive custom field name"),
     },
-    async ({ title, description, severity, tlp, pap, tags, flag, owner, template }) => {
+    async ({ title, description, severity, tlp, pap, tags, flag, owner, template, customFields }) => {
       try {
         const created = await client.createCase({
           title,
@@ -158,6 +182,7 @@ export function registerCaseTools(
           flag,
           owner,
           template,
+          customFields,
         });
         return {
           content: [
@@ -211,20 +236,23 @@ export function registerCaseTools(
         .describe("New PAP level"),
       tags: z.array(z.string()).optional().describe("New tags (replaces existing)"),
       status: z
-        .string()
+        .enum(caseStatusSchema.options)
         .optional()
         .describe("New status: New, InProgress, TruePositive, FalsePositive, Indeterminate, Duplicated, Other"),
       summary: z.string().optional().describe("Case summary/conclusion"),
       owner: z.string().optional().describe("New case owner"),
       impactStatus: z
-        .string()
+        .enum(impactStatusSchema.options)
         .optional()
         .describe("Impact status: NoImpact, WithImpact, NotApplicable"),
       resolutionStatus: z
-        .string()
+        .enum(resolutionStatusSchema.options)
         .optional()
         .describe("Resolution status: TruePositive, FalsePositive, Indeterminate, Duplicated, Other"),
       flag: z.boolean().optional().describe("Flag/star the case"),
+      customFields: customFieldsSchema
+        .optional()
+        .describe("Custom fields to update, keyed by TheHive custom field name"),
     },
     async ({ caseId, ...data }) => {
       try {
@@ -295,10 +323,10 @@ export function registerCaseTools(
     {
       caseId: z.string().describe("The case ID to close"),
       status: z
-        .enum(["TruePositive", "FalsePositive", "Indeterminate", "Duplicated", "Other"])
+        .enum(resolutionStatusSchema.options)
         .describe("Resolution status (becomes the case status in TheHive 5)"),
       impactStatus: z
-        .enum(["NoImpact", "WithImpact", "NotApplicable"])
+        .enum(impactStatusSchema.options)
         .optional()
         .describe("Impact status"),
       summary: z
@@ -335,6 +363,308 @@ export function registerCaseTools(
   );
 
   server.tool(
+    "thehive_assign_case",
+    "Assign a case to a TheHive user by username or login",
+    {
+      caseId: z.string().describe("The case ID to assign"),
+      owner: z.string().min(1).describe("Username or login to assign as case owner"),
+    },
+    async ({ caseId, owner }) => {
+      try {
+        const updated = await client.updateCase(caseId, { owner });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(updated, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error assigning case: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "thehive_update_case_custom_fields",
+    "Update custom fields on an existing case",
+    {
+      caseId: z.string().describe("The case ID to update"),
+      customFields: customFieldsSchema.describe("Custom fields keyed by TheHive custom field name"),
+    },
+    async ({ caseId, customFields }) => {
+      try {
+        const updated = await client.updateCase(caseId, { customFields });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(updated, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error updating case custom fields: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "thehive_add_case_tags",
+    "Add tags to a case without removing existing tags",
+    {
+      caseId: z.string().describe("The case ID to update"),
+      tags: z.array(z.string().min(1)).min(1).describe("Tags to add"),
+    },
+    async ({ caseId, tags }) => {
+      try {
+        const theCase = await client.getCase(caseId);
+        const mergedTags = Array.from(new Set([...(theCase.tags ?? []), ...tags]));
+        const updated = await client.updateCase(caseId, { tags: mergedTags });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(updated, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error adding case tags: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "thehive_remove_case_tags",
+    "Remove tags from a case while preserving other tags",
+    {
+      caseId: z.string().describe("The case ID to update"),
+      tags: z.array(z.string().min(1)).min(1).describe("Tags to remove"),
+    },
+    async ({ caseId, tags }) => {
+      try {
+        const theCase = await client.getCase(caseId);
+        const removeSet = new Set(tags);
+        const remainingTags = (theCase.tags ?? []).filter((tag) => !removeSet.has(tag));
+        const updated = await client.updateCase(caseId, { tags: remainingTags });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(updated, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error removing case tags: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "thehive_set_case_flag",
+    "Set or clear the case flag",
+    {
+      caseId: z.string().describe("The case ID to update"),
+      flag: z.boolean().describe("Whether the case should be flagged"),
+    },
+    async ({ caseId, flag }) => {
+      try {
+        const updated = await client.updateCase(caseId, { flag });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(updated, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error setting case flag: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "thehive_bulk_assign_cases",
+    "Assign multiple cases to a TheHive user",
+    {
+      caseIds: z.array(z.string()).min(1).max(50).describe("Case IDs to assign"),
+      owner: z.string().min(1).describe("Username or login to assign as case owner"),
+    },
+    async ({ caseIds, owner }) => {
+      const results = await Promise.allSettled(
+        caseIds.map(async (caseId) => client.updateCase(caseId, { owner })),
+      );
+      const summary = summarizeSettledResults(caseIds, results);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(summary, null, 2),
+          },
+        ],
+        isError: summary.failed > 0,
+      };
+    },
+  );
+
+  server.tool(
+    "thehive_bulk_close_cases",
+    "Close multiple cases with the same resolution status and summary",
+    {
+      caseIds: z.array(z.string()).min(1).max(50).describe("Case IDs to close"),
+      status: z
+        .enum(resolutionStatusSchema.options)
+        .describe("Resolution status (becomes the case status in TheHive 5)"),
+      impactStatus: z
+        .enum(impactStatusSchema.options)
+        .optional()
+        .describe("Impact status"),
+      summary: z.string().min(1).describe("Case summary/conclusion explaining the resolution"),
+    },
+    async ({ caseIds, status, impactStatus, summary }) => {
+      const results = await Promise.allSettled(
+        caseIds.map(async (caseId) =>
+          client.updateCase(caseId, {
+            status,
+            ...(impactStatus && { impactStatus }),
+            summary,
+          }),
+        ),
+      );
+      const resultSummary = summarizeSettledResults(caseIds, results);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(resultSummary, null, 2),
+          },
+        ],
+        isError: resultSummary.failed > 0,
+      };
+    },
+  );
+
+  server.tool(
+    "thehive_case_timeline_summary",
+    "Summarize a case with related tasks, observables, and comments",
+    {
+      caseId: z.string().describe("The case ID to summarize"),
+      limit: z.number().int().min(1).max(100).optional().describe("Maximum related items per category (default: 25)"),
+    },
+    async ({ caseId, limit }) => {
+      try {
+        const clampedLimit = limit ?? 25;
+        const [theCase, tasks, observables, comments] = await Promise.all([
+          client.getCase(caseId),
+          client.listTasks(caseId, { limit: clampedLimit }),
+          client.listObservables(caseId, { limit: clampedLimit }),
+          client.listComments(caseId, clampedLimit),
+        ]);
+        const summary = {
+          case: {
+            id: theCase._id,
+            number: theCase.number,
+            title: theCase.title,
+            status: theCase.status,
+            severity: theCase.severity,
+            owner: theCase.owner,
+            tags: theCase.tags ?? [],
+            createdAt: theCase._createdAt,
+            updatedAt: theCase._updatedAt,
+          },
+          counts: {
+            tasks: tasks.length,
+            observables: observables.length,
+            comments: comments.length,
+          },
+          tasks: tasks.map((task) => ({
+            id: task._id,
+            title: task.title,
+            status: task.status,
+            assignee: task.assignee,
+            dueDate: task.dueDate,
+          })),
+          observables: observables.map((observable) => ({
+            id: observable._id,
+            dataType: observable.dataType,
+            data: observable.data,
+            ioc: observable.ioc,
+            tags: observable.tags ?? [],
+          })),
+          comments: comments.map((comment) => ({
+            id: comment._id,
+            author: comment._createdBy,
+            createdAt: comment._createdAt,
+            message: comment.message,
+          })),
+        };
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(summary, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error summarizing case timeline: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
     "thehive_delete_case",
     "Permanently delete a case. Use force=true to delete even if the case has tasks/observables.",
     {
@@ -345,6 +675,9 @@ export function registerCaseTools(
         .describe("Force delete even if case has children (default: false)"),
     },
     async ({ caseId, force }) => {
+      if (!options.allowDestructiveTools) {
+        return destructiveToolDisabled("thehive_delete_case");
+      }
       try {
         await client.deleteCase(caseId, force);
         return {
@@ -402,4 +735,30 @@ export function registerCaseTools(
       }
     },
   );
+}
+
+function summarizeSettledResults<T>(
+  ids: string[],
+  results: PromiseSettledResult<T>[],
+): {
+  succeeded: number;
+  failed: number;
+  results: Array<{ id: string; ok: boolean; value?: T; error?: string }>;
+} {
+  const mappedResults = results.map((result, index) => {
+    if (result.status === "fulfilled") {
+      return { id: ids[index] ?? "", ok: true, value: result.value };
+    }
+    return {
+      id: ids[index] ?? "",
+      ok: false,
+      error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+    };
+  });
+
+  return {
+    succeeded: mappedResults.filter((result) => result.ok).length,
+    failed: mappedResults.filter((result) => !result.ok).length,
+    results: mappedResults,
+  };
 }

@@ -16,20 +16,20 @@
 
 MCP (Model Context Protocol) server for [TheHive](https://thehive-project.org/) security incident response platform. Lets AI agents create cases, manage alerts, track observables, run Cortex analyzers, and orchestrate incident response workflows.
 
-Tested against **TheHive 5.4.11** with full end-to-end verification (36 live integration tests).
+Tested against **TheHive 5.4.11** with live integration coverage for read, write, and destructive workflows.
 
 ## Features
 
-- **35 tools** covering the full TheHive 5 API surface
-- **Case management** - create, list, get, update, close, delete, search, merge cases
+- **47 tools** covering the full TheHive 5 API surface
+- **Case management** - create, list, get, update, assign, close, delete, search, merge, tag, flag, bulk update, summarize cases, update custom fields
 - **Alert management** - create, list, get, update, promote to case, delete alerts
 - **Task management** - create, list, get, update tasks within cases
 - **Observable management** - add (single + bulk), list, get, search observables
 - **Task logs** - add and list log entries on tasks
 - **Comments** - add and list comments on cases
 - **User management** - list users, get current user info
-- **Cortex integration** - list analyzers, run analyzer jobs, get job results
-- **Raw query API** - execute arbitrary TheHive Query DSL for complex searches
+- **Cortex integration** - list analyzers, run and poll jobs, summarize reports, find observable enrichment options
+- **Raw query API** - execute guarded TheHive Query DSL for complex searches
 - **Case templates** - list available templates for case creation
 - **Status** - health check, version info, capabilities
 - **3 prompt templates** - case summary, alert triage, incident response workflow
@@ -53,10 +53,12 @@ Set environment variables:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `THEHIVE_URL` | Yes | - | TheHive instance URL (e.g. `http://thehive:9000`) |
+| `THEHIVE_URL` | Yes | - | TheHive instance URL using `http` or `https` (e.g. `http://thehive:9000`) |
 | `THEHIVE_API_KEY` | Yes | - | API key for authentication |
-| `THEHIVE_VERIFY_SSL` | No | `true` | Set to `false` to disable SSL verification |
-| `THEHIVE_TIMEOUT` | No | `30` | Request timeout in seconds |
+| `THEHIVE_VERIFY_SSL` | No | `true` | Set to `false` only for trusted lab systems with self-signed TLS |
+| `THEHIVE_TIMEOUT` | No | `30` | Request timeout in seconds (1-300) |
+| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Set to `true` to enable MCP delete tools |
+| `THEHIVE_ENABLE_RAW_QUERY` | No | `false` | Set to `true` to enable the raw Query DSL MCP tool |
 
 ### Claude Desktop
 
@@ -180,7 +182,7 @@ codex mcp list
 
 ## Tools
 
-### Cases (8 tools)
+### Cases (16 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -190,6 +192,14 @@ codex mcp list
 | `thehive_update_case` | Update case fields (severity, status, tags, etc.) |
 | `thehive_search_cases` | Search cases by title keyword |
 | `thehive_close_case` | Close a case with resolution status and summary |
+| `thehive_assign_case` | Assign a case to a user |
+| `thehive_update_case_custom_fields` | Update case custom fields |
+| `thehive_add_case_tags` | Add tags without replacing existing tags |
+| `thehive_remove_case_tags` | Remove selected tags |
+| `thehive_set_case_flag` | Set or clear the case flag |
+| `thehive_bulk_assign_cases` | Assign multiple cases to a user |
+| `thehive_bulk_close_cases` | Close multiple cases with the same resolution |
+| `thehive_case_timeline_summary` | Summarize case details, tasks, observables, and comments |
 | `thehive_delete_case` | Permanently delete a case (with optional force) |
 | `thehive_merge_cases` | Merge multiple cases into one |
 
@@ -244,19 +254,23 @@ codex mcp list
 | `thehive_list_users` | List users in the organization |
 | `thehive_get_current_user` | Get the authenticated user's profile |
 
-### Cortex (3 tools)
+### Cortex (7 tools)
 
 | Tool | Description |
 |------|-------------|
 | `thehive_list_analyzers` | List available Cortex analyzers |
+| `thehive_get_observable_enrichment_options` | List analyzers that can enrich an observable |
 | `thehive_run_analyzer` | Run a Cortex analyzer on an observable |
+| `thehive_run_analyzer_and_wait` | Run an analyzer and wait for completion |
 | `thehive_get_job` | Get analyzer job status and results |
+| `thehive_wait_for_job` | Poll a job until it reaches a terminal status |
+| `thehive_summarize_job_report` | Return a compact analyzer report summary |
 
 ### Query (1 tool)
 
 | Tool | Description |
 |------|-------------|
-| `thehive_query` | Execute raw TheHive Query DSL for complex searches, date ranges, counting, etc. |
+| `thehive_query` | Execute guarded raw TheHive Query DSL for complex searches when enabled with `THEHIVE_ENABLE_RAW_QUERY=true` |
 
 ### Templates (1 tool)
 
@@ -295,11 +309,17 @@ npm install
 # Build
 npm run build
 
-# Run tests (unit, 68 tests)
+# Run tests
 npm test
 
-# Run live integration tests (36 tests, requires TheHive instance)
+# Run read-only live integration tests (skips when env vars are missing)
 THEHIVE_URL=http://your-thehive:9000 THEHIVE_API_KEY=your-key npx tsx scripts/live-test.ts
+
+# Run live write tests
+THEHIVE_URL=http://your-thehive:9000 THEHIVE_API_KEY=your-key THEHIVE_LIVE_ALLOW_WRITES=true npx tsx scripts/live-test.ts
+
+# Run live write tests with destructive cleanup, deletes, and merge checks
+THEHIVE_URL=http://your-thehive:9000 THEHIVE_API_KEY=your-key THEHIVE_LIVE_ALLOW_WRITES=true THEHIVE_LIVE_ALLOW_DESTRUCTIVE=true npx tsx scripts/live-test.ts
 
 # Type check
 npm run typecheck
@@ -316,6 +336,8 @@ THEHIVE_URL=http://your-thehive:9000 THEHIVE_API_KEY=your-key npm run dev
 - **Observable creation returns arrays.** The client handles this transparently. Bulk creation uses `data` as an array.
 - **Cortex connector endpoints** live under `/api/connector/` not `/api/v1/`.
 - **`description` is required** when creating cases and alerts.
+- **Destructive MCP tools are gated.** `thehive_delete_case` and `thehive_delete_alert` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`.
+- **Raw query is gated.** `thehive_query` requires `THEHIVE_ENABLE_RAW_QUERY=true`.
 
 ## License
 

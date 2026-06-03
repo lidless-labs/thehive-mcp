@@ -2,6 +2,19 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
 
+const observableDataTypeSchema = z.enum([
+  "ip",
+  "domain",
+  "url",
+  "mail",
+  "hash",
+  "filename",
+  "fqdn",
+  "user-agent",
+  "regexp",
+  "other",
+]);
+
 export function registerObservableTools(
   server: McpServer,
   client: TheHiveClient,
@@ -12,7 +25,7 @@ export function registerObservableTools(
     {
       caseId: z.string().describe("The case ID to list observables for"),
       dataType: z
-        .string()
+        .enum(observableDataTypeSchema.options)
         .optional()
         .describe(
           "Filter by data type: ip, domain, url, mail, hash, filename, fqdn, user-agent, regexp, other",
@@ -95,18 +108,7 @@ export function registerObservableTools(
     {
       caseId: z.string().describe("The case ID to add the observable to"),
       dataType: z
-        .enum([
-          "ip",
-          "domain",
-          "url",
-          "mail",
-          "hash",
-          "filename",
-          "fqdn",
-          "user-agent",
-          "regexp",
-          "other",
-        ])
+        .enum(observableDataTypeSchema.options)
         .describe("Observable data type"),
       data: z
         .string()
@@ -198,18 +200,7 @@ export function registerObservableTools(
     {
       caseId: z.string().describe("The case ID to add observables to"),
       dataType: z
-        .enum([
-          "ip",
-          "domain",
-          "url",
-          "mail",
-          "hash",
-          "filename",
-          "fqdn",
-          "user-agent",
-          "regexp",
-          "other",
-        ])
+        .enum(observableDataTypeSchema.options)
         .describe("Observable data type (all items must be the same type)"),
       data: z
         .array(z.string())
@@ -286,7 +277,7 @@ export function registerObservableTools(
     "Search observables across all cases",
     {
       dataType: z
-        .string()
+        .enum(observableDataTypeSchema.options)
         .optional()
         .describe("Filter by data type"),
       data: z

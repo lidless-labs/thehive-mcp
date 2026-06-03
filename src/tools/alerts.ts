@@ -1,17 +1,21 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
+import { destructiveToolDisabled, type ToolSafetyOptions } from "./safety.js";
+
+const alertStatusSchema = z.enum(["New", "Updated", "Ignored", "Imported"]);
 
 export function registerAlertTools(
   server: McpServer,
   client: TheHiveClient,
+  options: ToolSafetyOptions = {},
 ): void {
   server.tool(
     "thehive_list_alerts",
     "List alerts from TheHive with optional filters",
     {
       status: z
-        .string()
+        .enum(alertStatusSchema.options)
         .optional()
         .describe("Filter by status: New, Updated, Ignored, Imported"),
       severity: z
@@ -210,7 +214,7 @@ export function registerAlertTools(
         .optional()
         .describe("New tags (replaces existing)"),
       status: z
-        .string()
+        .enum(alertStatusSchema.options)
         .optional()
         .describe("New status: New, Updated, Ignored, Imported"),
       follow: z
@@ -281,6 +285,9 @@ export function registerAlertTools(
       alertId: z.string().describe("The alert ID to delete"),
     },
     async ({ alertId }) => {
+      if (!options.allowDestructiveTools) {
+        return destructiveToolDisabled("thehive_delete_alert");
+      }
       try {
         await client.deleteAlert(alertId);
         return {

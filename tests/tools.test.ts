@@ -18,6 +18,8 @@ const mockConfig = {
   apiKey: "test-key",
   verifySsl: true,
   timeout: 30000,
+  allowDestructiveTools: false,
+  enableRawQuery: false,
 };
 
 describe("tool registration", () => {
@@ -35,10 +37,10 @@ describe("tool registration", () => {
     server.tool = toolSpy as unknown as typeof server.tool;
   });
 
-  it("should register 8 case tools", () => {
+  it("should register 16 case tools", () => {
     registerCaseTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(8);
+    expect(toolSpy).toHaveBeenCalledTimes(16);
 
     const toolNames = toolSpy.mock.calls.map(
       (call: unknown[]) => call[0] as string,
@@ -49,6 +51,14 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_update_case");
     expect(toolNames).toContain("thehive_search_cases");
     expect(toolNames).toContain("thehive_close_case");
+    expect(toolNames).toContain("thehive_assign_case");
+    expect(toolNames).toContain("thehive_update_case_custom_fields");
+    expect(toolNames).toContain("thehive_add_case_tags");
+    expect(toolNames).toContain("thehive_remove_case_tags");
+    expect(toolNames).toContain("thehive_set_case_flag");
+    expect(toolNames).toContain("thehive_bulk_assign_cases");
+    expect(toolNames).toContain("thehive_bulk_close_cases");
+    expect(toolNames).toContain("thehive_case_timeline_summary");
     expect(toolNames).toContain("thehive_delete_case");
     expect(toolNames).toContain("thehive_merge_cases");
   });
@@ -134,17 +144,21 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_get_current_user");
   });
 
-  it("should register 3 cortex tools", () => {
+  it("should register 7 cortex tools", () => {
     registerCortexTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(3);
+    expect(toolSpy).toHaveBeenCalledTimes(7);
 
     const toolNames = toolSpy.mock.calls.map(
       (call: unknown[]) => call[0] as string,
     );
     expect(toolNames).toContain("thehive_list_analyzers");
+    expect(toolNames).toContain("thehive_get_observable_enrichment_options");
     expect(toolNames).toContain("thehive_run_analyzer");
+    expect(toolNames).toContain("thehive_run_analyzer_and_wait");
     expect(toolNames).toContain("thehive_get_job");
+    expect(toolNames).toContain("thehive_wait_for_job");
+    expect(toolNames).toContain("thehive_summarize_job_report");
   });
 
   it("should register 1 status tool", () => {
@@ -180,7 +194,7 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_list_case_templates");
   });
 
-  it("should register all 36 tools total", () => {
+  it("should register all 47 tools total", () => {
     registerCaseTools(server, client);
     registerAlertTools(server, client);
     registerTaskTools(server, client);
@@ -193,6 +207,51 @@ describe("tool registration", () => {
     registerQueryTools(server, client);
     registerTemplateTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(35);
+    expect(toolSpy).toHaveBeenCalledTimes(47);
+  });
+
+  it("should disable destructive case tools by default", async () => {
+    registerCaseTools(server, client);
+
+    const deleteTool = toolSpy.mock.calls.find(
+      (call: unknown[]) => call[0] === "thehive_delete_case",
+    );
+    expect(deleteTool).toBeDefined();
+    const handler = deleteTool?.[3] as (args: { caseId: string }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
+
+    const result = await handler({ caseId: "~123" });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true");
+  });
+
+  it("should disable destructive alert tools by default", async () => {
+    registerAlertTools(server, client);
+
+    const deleteTool = toolSpy.mock.calls.find(
+      (call: unknown[]) => call[0] === "thehive_delete_alert",
+    );
+    expect(deleteTool).toBeDefined();
+    const handler = deleteTool?.[3] as (args: { alertId: string }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
+
+    const result = await handler({ alertId: "~alert" });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true");
+  });
+
+  it("should disable raw query tools by default", async () => {
+    registerQueryTools(server, client);
+
+    const queryTool = toolSpy.mock.calls.find(
+      (call: unknown[]) => call[0] === "thehive_query",
+    );
+    expect(queryTool).toBeDefined();
+    const handler = queryTool?.[3] as (args: { query: string }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
+
+    const result = await handler({ query: "[{\"_name\":\"listCase\"}]" });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("THEHIVE_ENABLE_RAW_QUERY=true");
   });
 });

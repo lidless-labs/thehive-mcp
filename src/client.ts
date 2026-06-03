@@ -14,12 +14,18 @@ import type {
 } from "./types.js";
 
 export class TheHiveClient {
-  private baseUrl: string;
-  private headers: Record<string, string>;
-  private timeout: number;
+  private readonly baseUrl: string;
+  private readonly connectorBaseUrl: string;
+  private readonly statusUrl: string;
+  private readonly headers: Record<string, string>;
+  private readonly timeout: number;
+  private readonly apiKey: string;
 
   constructor(config: TheHiveConfig) {
     this.baseUrl = `${config.url}/api/v1`;
+    this.connectorBaseUrl = `${config.url}/api`;
+    this.statusUrl = `${config.url}/api/status`;
+    this.apiKey = config.apiKey;
     this.headers = {
       Authorization: `Bearer ${config.apiKey}`,
       "Content-Type": "application/json",
@@ -31,17 +37,34 @@ export class TheHiveClient {
     path: string,
     options: RequestInit = {},
   ): Promise<T> {
-    const url = `${this.baseUrl}${path}`;
+    return this.fetchJson<T>(`${this.baseUrl}${path}`, options);
+  }
+
+  private async connectorRequest<T>(
+    path: string,
+    options: RequestInit = {},
+  ): Promise<T> {
+    return this.fetchJson<T>(`${this.connectorBaseUrl}${path}`, options);
+  }
+
+  private async fetchJson<T>(
+    url: string,
+    options: RequestInit = {},
+    authenticated = true,
+  ): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    const headers = authenticated
+      ? {
+          ...this.headers,
+          ...(options.headers as Record<string, string> | undefined),
+        }
+      : options.headers;
 
     try {
       const response = await fetch(url, {
         ...options,
-        headers: {
-          ...this.headers,
-          ...(options.headers as Record<string, string>),
-        },
+        headers,
         signal: controller.signal,
       });
 
@@ -56,6 +79,14 @@ export class TheHiveClient {
         return {} as T;
       }
 
+      if (typeof response.text === "function") {
+        const body = await response.text();
+        if (!body) {
+          return {} as T;
+        }
+        return JSON.parse(body) as T;
+      }
+
       return (await response.json()) as T;
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
@@ -68,7 +99,7 @@ export class TheHiveClient {
   }
 
   private getErrorMessage(status: number, body: string): string {
-    const detail = body ? `: ${body.slice(0, 200)}` : "";
+    const detail = this.formatErrorDetail(body);
     switch (status) {
       case 401:
         return `TheHive API authentication failed - check your API key${detail}`;
@@ -83,6 +114,21 @@ export class TheHiveClient {
       default:
         return `TheHive API error (${status})${detail}`;
     }
+  }
+
+  private formatErrorDetail(body: string): string {
+    const sanitized = this.redactSensitiveText(body)
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 200);
+    return sanitized ? `: ${sanitized}` : "";
+  }
+
+  private redactSensitiveText(text: string): string {
+    return text
+      .replaceAll(this.apiKey, "[REDACTED]")
+      .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
+      .replace(/("(?:api[_-]?key|authorization|token|password)"\s*:\s*")([^"]+)(")/gi, "$1[REDACTED]$3");
   }
 
   private async query<T>(
@@ -156,6 +202,7 @@ export class TheHiveClient {
     flag?: boolean;
     owner?: string;
     template?: string;
+    customFields?: Record<string, unknown>;
   }): Promise<TheHiveCase> {
     return this.request<TheHiveCase>("/case", {
       method: "POST",
@@ -169,6 +216,7 @@ export class TheHiveClient {
         ...(data.flag !== undefined && { flag: data.flag }),
         ...(data.owner && { owner: data.owner }),
         ...(data.template && { caseTemplate: data.template }),
+        ...(data.customFields && { customFields: data.customFields }),
       }),
     });
   }
@@ -188,6 +236,7 @@ export class TheHiveClient {
       impactStatus?: string;
       resolutionStatus?: string;
       flag?: boolean;
+      customFields?: Record<string, unknown>;
     },
   ): Promise<TheHiveCase> {
     await this.request<Record<string, never>>(
@@ -621,17 +670,39 @@ export class TheHiveClient {
     queryFilters: Record<string, unknown>[],
     options: { range?: string; sort?: string[]; name?: string } = {},
   ): Promise<unknown[]> {
+    const normalizedOptions = this.normalizeRawQueryOptions(queryFilters, options);
     const body: Record<string, unknown> = {
       query: queryFilters,
     };
-    if (options.range) body.range = options.range;
-    if (options.sort) body.sort = options.sort;
+    if (normalizedOptions.range) body.range = normalizedOptions.range;
+    if (normalizedOptions.sort) body.sort = normalizedOptions.sort;
 
-    const nameParam = options.name ? `?name=${encodeURIComponent(options.name)}` : "";
+    const nameParam = normalizedOptions.name ? `?name=${encodeURIComponent(normalizedOptions.name)}` : "";
     return this.request<unknown[]>(`/query${nameParam}`, {
       method: "POST",
       body: JSON.stringify(body),
     });
+  }
+
+  private normalizeRawQueryOptions(
+    queryFilters: Record<string, unknown>[],
+    options: { range?: string; sort?: string[]; name?: string },
+  ): { range?: string; sort?: string[]; name?: string } {
+    if (!Array.isArray(queryFilters) || queryFilters.some((filter) => !isPlainObject(filter))) {
+      throw new Error("Query must be a JSON array of filter objects");
+    }
+
+    const normalized: { range?: string; sort?: string[]; name?: string } = {};
+    if (options.range !== undefined) {
+      normalized.range = normalizeQueryRange(options.range);
+    }
+    if (options.sort !== undefined) {
+      normalized.sort = normalizeQuerySort(options.sort);
+    }
+    if (options.name !== undefined) {
+      normalized.name = normalizeQueryName(options.name);
+    }
+    return normalized;
   }
 
   // --- Cortex ---
@@ -667,72 +738,92 @@ export class TheHiveClient {
     );
   }
 
-  /**
-   * Connector endpoints live under /api/connector/ not /api/v1/
-   */
-  private async connectorRequest<T>(
-    path: string,
-    options: RequestInit = {},
-  ): Promise<T> {
-    const url = `${this.baseUrl.replace("/api/v1", "/api")}${path}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+  async waitForJob(
+    jobId: string,
+    options: { maxAttempts?: number; intervalMs?: number } = {},
+  ): Promise<TheHiveJob> {
+    const maxAttempts = Math.min(Math.max(options.maxAttempts ?? 20, 1), 60);
+    const intervalMs = Math.min(Math.max(options.intervalMs ?? 2000, 100), 10000);
 
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          ...this.headers,
-          ...(options.headers as Record<string, string>),
-        },
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const body = await response.text().catch(() => "");
-        throw new Error(this.getErrorMessage(response.status, body));
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const job = await this.getJob(jobId);
+      if (isTerminalJobStatus(job.status)) {
+        return job;
       }
 
-      if (response.status === 204) {
-        return {} as T;
+      if (attempt < maxAttempts) {
+        await sleep(intervalMs);
       }
-
-      return (await response.json()) as T;
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        throw new Error(`TheHive API timeout after ${this.timeout}ms`);
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeoutId);
     }
+
+    throw new Error(`Cortex job ${jobId} did not complete after ${maxAttempts} attempts`);
   }
 
   // --- Status ---
 
   async getStatus(): Promise<TheHiveStatus> {
-    const url = this.baseUrl.replace("/api/v1", "/api/status");
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-    try {
-      const response = await fetch(url, {
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const body = await response.text().catch(() => "");
-        throw new Error(this.getErrorMessage(response.status, body));
-      }
-
-      return (await response.json()) as TheHiveStatus;
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        throw new Error(`TheHive API timeout after ${this.timeout}ms`);
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    return this.fetchJson<TheHiveStatus>(this.statusUrl, {}, false);
   }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeQueryRange(range: string): string {
+  if (typeof range !== "string") {
+    throw new Error("Query range must be a string");
+  }
+  const match = range.trim().match(/^(\d+)-(\d+)$/);
+  if (!match) {
+    throw new Error("Query range must use start-end format, for example 0-100");
+  }
+
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || end < start) {
+    throw new Error("Query range end must be greater than or equal to start");
+  }
+
+  return `${start}-${Math.min(end, start + 500)}`;
+}
+
+function normalizeQuerySort(sort: string[]): string[] {
+  if (!Array.isArray(sort)) {
+    throw new Error("Query sort must be an array of field names");
+  }
+
+  return sort.map((field) => {
+    if (typeof field !== "string") {
+      throw new Error("Query sort fields must be strings");
+    }
+    const normalized = field.trim();
+    if (!normalized || normalized.length > 100) {
+      throw new Error("Query sort fields must be non-empty strings up to 100 characters");
+    }
+    return normalized;
+  });
+}
+
+function normalizeQueryName(name: string): string {
+  if (typeof name !== "string") {
+    throw new Error("Query name must be a string");
+  }
+  const normalized = name.trim();
+  if (!normalized || normalized.length > 100) {
+    throw new Error("Query name must be a non-empty string up to 100 characters");
+  }
+  return normalized;
+}
+
+function isTerminalJobStatus(status: string | undefined): boolean {
+  if (!status) {
+    return false;
+  }
+
+  return ["success", "failure", "error", "deleted"].includes(status.toLowerCase());
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
