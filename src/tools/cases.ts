@@ -704,7 +704,7 @@ export function registerCaseTools(
 
   server.tool(
     "thehive_merge_cases",
-    "Merge multiple cases into a single case",
+    "Merge multiple cases into a single case. This is irreversible and data-destructive.",
     {
       caseIds: z
         .array(z.string())
@@ -712,6 +712,9 @@ export function registerCaseTools(
         .describe("Array of case IDs to merge (minimum 2)"),
     },
     async ({ caseIds }) => {
+      if (!options.allowDestructiveTools) {
+        return destructiveToolDisabled("thehive_merge_cases");
+      }
       try {
         const merged = await client.mergeCases(caseIds);
         return {

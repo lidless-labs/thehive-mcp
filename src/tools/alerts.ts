@@ -254,6 +254,9 @@ export function registerAlertTools(
       alertId: z.string().describe("The alert ID to promote to a case"),
     },
     async ({ alertId }) => {
+      if (!options.allowDestructiveTools) {
+        return destructiveToolDisabled("thehive_promote_alert");
+      }
       try {
         const promoted = await client.promoteAlert(alertId);
         return {

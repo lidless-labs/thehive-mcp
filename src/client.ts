@@ -1,3 +1,4 @@
+import { Agent } from "undici";
 import type { TheHiveConfig } from "./config.js";
 import type {
   TheHiveCase,
@@ -20,6 +21,7 @@ export class TheHiveClient {
   private readonly headers: Record<string, string>;
   private readonly timeout: number;
   private readonly apiKey: string;
+  private readonly dispatcher?: Agent;
 
   constructor(config: TheHiveConfig) {
     this.baseUrl = `${config.url}/api/v1`;
@@ -31,6 +33,13 @@ export class TheHiveClient {
       "Content-Type": "application/json",
     };
     this.timeout = config.timeout;
+    // When SSL verification is opted out of, scope the relaxed TLS setting to
+    // this client's requests via a per-instance undici dispatcher instead of
+    // mutating the process-global NODE_TLS_REJECT_UNAUTHORIZED, which would
+    // disable certificate validation for the entire process.
+    this.dispatcher = config.verifySsl
+      ? undefined
+      : new Agent({ connect: { rejectUnauthorized: false } });
   }
 
   private async request<T>(
@@ -66,6 +75,7 @@ export class TheHiveClient {
         ...options,
         headers,
         signal: controller.signal,
+        ...(this.dispatcher && { dispatcher: this.dispatcher }),
       });
 
       if (!response.ok) {

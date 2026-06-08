@@ -55,9 +55,9 @@ Set environment variables:
 |----------|----------|---------|-------------|
 | `THEHIVE_URL` | Yes | - | TheHive instance URL using `http` or `https` (e.g. `http://thehive:9000`) |
 | `THEHIVE_API_KEY` | Yes | - | API key for authentication |
-| `THEHIVE_VERIFY_SSL` | No | `true` | Set to `false` only for trusted lab systems with self-signed TLS |
+| `THEHIVE_VERIFY_SSL` | No | `true` | Set to `false` only for trusted lab systems with self-signed TLS. When disabled, TLS verification is relaxed only for TheHive requests (via a scoped dispatcher), not for the whole process |
 | `THEHIVE_TIMEOUT` | No | `30` | Request timeout in seconds (1-300) |
-| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Set to `true` to enable MCP delete tools |
+| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Set to `true` to enable destructive/irreversible MCP tools (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`) |
 | `THEHIVE_ENABLE_RAW_QUERY` | No | `false` | Set to `true` to enable the raw Query DSL MCP tool |
 
 ### Claude Desktop
@@ -200,8 +200,8 @@ codex mcp list
 | `thehive_bulk_assign_cases` | Assign multiple cases to a user |
 | `thehive_bulk_close_cases` | Close multiple cases with the same resolution |
 | `thehive_case_timeline_summary` | Summarize case details, tasks, observables, and comments |
-| `thehive_delete_case` | Permanently delete a case (with optional force) |
-| `thehive_merge_cases` | Merge multiple cases into one |
+| `thehive_delete_case` | Permanently delete a case (with optional force). Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
+| `thehive_merge_cases` | Merge multiple cases into one (irreversible). Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
 
 ### Alerts (6 tools)
 
@@ -211,8 +211,8 @@ codex mcp list
 | `thehive_get_alert` | Get a specific alert by ID |
 | `thehive_create_alert` | Create a new alert |
 | `thehive_update_alert` | Update alert fields |
-| `thehive_promote_alert` | Promote an alert to a case |
-| `thehive_delete_alert` | Permanently delete an alert |
+| `thehive_promote_alert` | Promote an alert to a case (creates a new case). Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
+| `thehive_delete_alert` | Permanently delete an alert. Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
 
 ### Tasks (4 tools)
 
@@ -332,8 +332,9 @@ THEHIVE_URL=http://your-thehive:9000 THEHIVE_API_KEY=your-key npm run dev
 - **Observable creation returns arrays.** The client handles this transparently. Bulk creation uses `data` as an array.
 - **Cortex connector endpoints** live under `/api/connector/` not `/api/v1/`.
 - **`description` is required** when creating cases and alerts.
-- **Destructive MCP tools are gated.** `thehive_delete_case` and `thehive_delete_alert` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`.
+- **Destructive MCP tools are gated.** `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases` (irreversible), and `thehive_promote_alert` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`.
 - **Raw query is gated.** `thehive_query` requires `THEHIVE_ENABLE_RAW_QUERY=true`.
+- **SSL verification is scoped.** Setting `THEHIVE_VERIFY_SSL=false` relaxes TLS certificate validation only for requests to TheHive (via a per-client undici dispatcher) and never disables it process-wide. A warning is logged to stderr when enabled.
 
 ## License
 

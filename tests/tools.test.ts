@@ -236,6 +236,72 @@ describe("tool registration", () => {
     expect(result.content[0]?.text).toContain("THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true");
   });
 
+  it("should gate thehive_merge_cases behind allowDestructiveTools", async () => {
+    registerCaseTools(server, client);
+
+    const mergeTool = toolSpy.mock.calls.find(
+      (call: unknown[]) => call[0] === "thehive_merge_cases",
+    );
+    expect(mergeTool).toBeDefined();
+    const handler = mergeTool?.[3] as (args: { caseIds: string[] }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
+
+    const result = await handler({ caseIds: ["~1", "~2"] });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("thehive_merge_cases is disabled");
+    expect(result.content[0]?.text).toContain("THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true");
+  });
+
+  it("should allow thehive_merge_cases when allowDestructiveTools is true", async () => {
+    const mergeSpy = vi
+      .spyOn(client, "mergeCases")
+      .mockResolvedValue({ _id: "~merged" } as never);
+    registerCaseTools(server, client, { allowDestructiveTools: true });
+
+    const mergeTool = toolSpy.mock.calls.find(
+      (call: unknown[]) => call[0] === "thehive_merge_cases",
+    );
+    const handler = mergeTool?.[3] as (args: { caseIds: string[] }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
+
+    const result = await handler({ caseIds: ["~1", "~2"] });
+
+    expect(result.isError).toBeUndefined();
+    expect(mergeSpy).toHaveBeenCalledWith(["~1", "~2"]);
+  });
+
+  it("should gate thehive_promote_alert behind allowDestructiveTools", async () => {
+    registerAlertTools(server, client);
+
+    const promoteTool = toolSpy.mock.calls.find(
+      (call: unknown[]) => call[0] === "thehive_promote_alert",
+    );
+    expect(promoteTool).toBeDefined();
+    const handler = promoteTool?.[3] as (args: { alertId: string }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
+
+    const result = await handler({ alertId: "~alert" });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("thehive_promote_alert is disabled");
+    expect(result.content[0]?.text).toContain("THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true");
+  });
+
+  it("should allow thehive_promote_alert when allowDestructiveTools is true", async () => {
+    const promoteSpy = vi
+      .spyOn(client, "promoteAlert")
+      .mockResolvedValue({ _id: "~case" } as never);
+    registerAlertTools(server, client, { allowDestructiveTools: true });
+
+    const promoteTool = toolSpy.mock.calls.find(
+      (call: unknown[]) => call[0] === "thehive_promote_alert",
+    );
+    const handler = promoteTool?.[3] as (args: { alertId: string }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
+
+    const result = await handler({ alertId: "~alert" });
+
+    expect(result.isError).toBeUndefined();
+    expect(promoteSpy).toHaveBeenCalledWith("~alert");
+  });
+
   it("should disable raw query tools by default", async () => {
     registerQueryTools(server, client);
 

@@ -39,6 +39,40 @@ describe("TheHiveClient", () => {
     });
   });
 
+  describe("TLS verification scoping", () => {
+    it("should not pass a dispatcher when SSL verification is enabled", async () => {
+      const fetchMock = mockFetch([]);
+      globalThis.fetch = fetchMock;
+
+      const secureClient = new TheHiveClient({ ...mockConfig, verifySsl: true });
+      await secureClient.listCases();
+
+      const [, options] = fetchMock.mock.calls[0];
+      expect(options.dispatcher).toBeUndefined();
+    });
+
+    it("should pass a per-request dispatcher (not mutate global TLS) when SSL verification is disabled", async () => {
+      const originalGlobal = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+      delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+      const fetchMock = mockFetch([]);
+      globalThis.fetch = fetchMock;
+
+      const insecureClient = new TheHiveClient({ ...mockConfig, verifySsl: false });
+      await insecureClient.listCases();
+
+      const [, options] = fetchMock.mock.calls[0];
+      expect(options.dispatcher).toBeDefined();
+      // The process-global must never be touched by constructing the client.
+      expect(process.env.NODE_TLS_REJECT_UNAUTHORIZED).toBeUndefined();
+
+      if (originalGlobal === undefined) {
+        delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+      } else {
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalGlobal;
+      }
+    });
+  });
+
   describe("cases", () => {
     it("should list cases with filters", async () => {
       const mockCases = [

@@ -25,7 +25,11 @@ async function main(): Promise<void> {
   const config = getConfig();
 
   if (!config.verifySsl) {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+    console.error(
+      "[thehive-mcp] WARNING: THEHIVE_VERIFY_SSL=false - TLS certificate " +
+        "validation is disabled for TheHive requests. This exposes connections " +
+        "to man-in-the-middle attacks; use only against trusted hosts.",
+    );
   }
 
   const server = new McpServer({
