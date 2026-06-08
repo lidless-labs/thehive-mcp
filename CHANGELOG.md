@@ -9,6 +9,10 @@
 - **`thehive_set_case_flag`** - Set or clear a case flag
 - **`thehive_bulk_assign_cases`** and **`thehive_bulk_close_cases`** - Apply common case lifecycle updates to up to 50 cases
 - **`thehive_case_timeline_summary`** - Summarize a case with related tasks, observables, and comments
+- **`thehive_get_observable_enrichment_options`** - List Cortex analyzers that can enrich an observable
+- **`thehive_run_analyzer_and_wait`** and **`thehive_wait_for_job`** - Poll Cortex jobs until terminal status
+- **`thehive_summarize_job_report`** - Return compact Cortex report summaries
+- **`thehive_merge_cases`** and **`thehive_promote_alert`** gated behind `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS`
 - `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` to keep MCP delete tools disabled by default
 - `THEHIVE_ENABLE_RAW_QUERY` to keep the raw Query DSL MCP tool disabled by default
 - Live test flags for read-only, write, destructive, and custom-field compatibility passes
@@ -28,8 +32,8 @@
 
 ### Changed
 - Version bumped to 1.2.0
-- Total tools: 35 -> 43
-- Total unit tests: 68 -> 87
+- Total tools: 35 -> 47
+- Total unit tests: 68 -> 95
 - Live integration script now skips cleanly when credentials are missing and gates write/destructive checks
 
 ## [1.1.0] - 2026-03-21

@@ -144,17 +144,21 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_get_current_user");
   });
 
-  it("should register 3 cortex tools", () => {
+  it("should register 7 cortex tools", () => {
     registerCortexTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(3);
+    expect(toolSpy).toHaveBeenCalledTimes(7);
 
     const toolNames = toolSpy.mock.calls.map(
       (call: unknown[]) => call[0] as string,
     );
     expect(toolNames).toContain("thehive_list_analyzers");
+    expect(toolNames).toContain("thehive_get_observable_enrichment_options");
     expect(toolNames).toContain("thehive_run_analyzer");
+    expect(toolNames).toContain("thehive_run_analyzer_and_wait");
     expect(toolNames).toContain("thehive_get_job");
+    expect(toolNames).toContain("thehive_wait_for_job");
+    expect(toolNames).toContain("thehive_summarize_job_report");
   });
 
   it("should register 1 status tool", () => {
@@ -190,7 +194,7 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_list_case_templates");
   });
 
-  it("should register all 43 tools total", () => {
+  it("should register all 47 tools total", () => {
     registerCaseTools(server, client);
     registerAlertTools(server, client);
     registerTaskTools(server, client);
@@ -203,7 +207,7 @@ describe("tool registration", () => {
     registerQueryTools(server, client);
     registerTemplateTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(43);
+    expect(toolSpy).toHaveBeenCalledTimes(47);
   });
 
   it("should disable destructive case tools by default", async () => {
