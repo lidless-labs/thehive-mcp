@@ -1,76 +1,62 @@
 <p align="center">
-  <img src="docs/assets/thehive-mcp-banner.jpg" alt="Watercolor incident response honeycomb workflow for thehive-mcp" width="100%" />
+  <img src="docs/assets/thehive-mcp-banner.jpg" alt="thehive-mcp banner" width="100%" />
 </p>
 
 <h1 align="center">thehive-mcp</h1>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/thehive-mcp"><img src="https://img.shields.io/npm/v/thehive-mcp?style=flat-square&logo=npm&color=cb3837" alt="npm version" /></a>
-  <a href="https://github.com/solomonneas/thehive-mcp/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/solomonneas/thehive-mcp/ci.yml?branch=main&style=flat-square&label=CI&logo=github" alt="CI status" /></a>
-  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-6.0-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 6.0" /></a>
-  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-20%2B-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 20+" /></a>
-  <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP%20SDK-1.29-6f42c1?style=flat-square" alt="MCP SDK 1.29" /></a>
-  <a href="https://thehive-project.org/"><img src="https://img.shields.io/badge/TheHive-5.4.11-f6c343?style=flat-square" alt="Tested with TheHive 5.4.11" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" alt="MIT license" /></a>
+  <strong>An MCP server that gives an AI client full read-write control of TheHive: cases, alerts, tasks, observables, and Cortex analyzers, over stdio with destructive actions gated off by default.</strong>
 </p>
 
-MCP (Model Context Protocol) server for [TheHive](https://thehive-project.org/) security incident response platform. Lets AI agents create cases, manage alerts, track observables, run Cortex analyzers, and orchestrate incident response workflows.
+<p align="center">
+  <a href="https://www.npmjs.com/package/thehive-mcp"><img src="https://img.shields.io/npm/v/thehive-mcp?style=for-the-badge&logo=npm&color=cb3837&label=npm" alt="npm version" /></a>
+  <a href="https://github.com/lidless-labs/thehive-mcp/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/lidless-labs/thehive-mcp/ci.yml?branch=main&style=for-the-badge&label=CI&logo=github" alt="CI status" /></a>
+  <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP-server-6f42c1?style=for-the-badge" alt="MCP server" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="MIT license" /></a>
+</p>
 
-Tested against **TheHive 5.4.11** with live integration coverage for read, write, and destructive workflows.
+<p align="center">
+  <strong>Website: <a href="https://lidless.dev/thehive-mcp">lidless.dev/thehive-mcp</a></strong>
+</p>
 
-## Features
+thehive-mcp is a Model Context Protocol server for [TheHive](https://thehive-project.org/), the open-source security incident response platform. It lets an AI client run the SOC workflow end to end: open and triage cases, promote alerts, track observables, drive tasks, and run Cortex analyzers, all through one stdio process. It differs from a generic REST wrapper because the dangerous verbs (delete, merge, promote, raw query) ship disabled and only turn on behind explicit environment flags, so an agent cannot quietly destroy case data.
 
-- **47 tools** covering the full TheHive 5 API surface
-- **Case management** - create, list, get, update, assign, close, delete, search, merge, tag, flag, bulk update, summarize cases, update custom fields
-- **Alert management** - create, list, get, update, promote to case, delete alerts
-- **Task management** - create, list, get, update tasks within cases
-- **Observable management** - add (single + bulk), list, get, search observables
-- **Task logs** - add and list log entries on tasks
-- **Comments** - add and list comments on cases
-- **User management** - list users, get current user info
-- **Cortex integration** - list analyzers, run and poll jobs, summarize reports, find observable enrichment options
-- **Raw query API** - execute guarded TheHive Query DSL for complex searches
-- **Case templates** - list available templates for case creation
-- **Status** - health check, version info, capabilities
-- **3 prompt templates** - case summary, alert triage, incident response workflow
-- **3 resources** - open cases, new alerts, current user
+## What it does
 
-## Installation
+thehive-mcp is an MCP server for **TheHive** incident response and case management. It exposes 47 Model Context Protocol tools that map onto the full TheHive 5 API surface, so an MCP client (Claude Desktop, Claude Code, Codex CLI, OpenClaw, Hermes, or any other) can drive a security operations center: create and triage cases, manage alerts, add and search observables, run and poll Cortex analyzers, file task logs and comments, and orchestrate SOAR-style incident response workflows in plain language. It talks to your TheHive instance over its REST API and speaks MCP over stdio, so it slots into any agent that supports the protocol with no extra service to run.
 
-```bash
-npm install -g thehive-mcp
-```
+The differentiator is safety. Irreversible operations (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`) and the raw Query DSL tool are gated off by default and only become callable when you opt in with an environment variable. TLS relaxation is scoped to TheHive requests only, never the whole process. The server is tested against a live **TheHive 5.4.11** instance across read, write, and destructive workflows.
 
-Or run directly:
+## Quickstart
+
+Run it straight from npm, no global install needed:
 
 ```bash
-npx thehive-mcp
+npx -y thehive-mcp
 ```
 
-## Configuration
+Point it at your TheHive instance with two environment variables:
 
-Set environment variables:
+```bash
+THEHIVE_URL=https://192.0.2.10:9000 \
+THEHIVE_API_KEY=your-api-key \
+npx -y thehive-mcp
+```
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `THEHIVE_URL` | Yes | - | TheHive instance URL using `http` or `https` (e.g. `http://thehive:9000`) |
-| `THEHIVE_API_KEY` | Yes | - | API key for authentication |
-| `THEHIVE_VERIFY_SSL` | No | `true` | Set to `false` only for trusted lab systems with self-signed TLS. When disabled, TLS verification is relaxed only for TheHive requests (via a scoped dispatcher), not for the whole process |
-| `THEHIVE_TIMEOUT` | No | `30` | Request timeout in seconds (1-300) |
-| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Set to `true` to enable destructive/irreversible MCP tools (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`) |
-| `THEHIVE_ENABLE_RAW_QUERY` | No | `false` | Set to `true` to enable the raw Query DSL MCP tool |
+The server speaks MCP over stdio, so it is meant to be launched by an MCP client rather than run by hand. The client config below is the normal entry point.
 
-### Claude Desktop
+### MCP client config
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+Drop this into any MCP client that reads the standard `mcpServers` map (Claude Desktop, Claude Code, and most others use this exact shape):
 
 ```json
 {
   "mcpServers": {
     "thehive": {
-      "command": "thehive-mcp",
+      "command": "npx",
+      "args": ["-y", "thehive-mcp"],
       "env": {
-        "THEHIVE_URL": "http://your-thehive:9000",
+        "THEHIVE_URL": "https://192.0.2.10:9000",
         "THEHIVE_API_KEY": "your-api-key"
       }
     }
@@ -78,109 +64,43 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 }
 ```
 
-### Claude Code
+To enable the gated destructive tools and the raw Query DSL tool, add them to `env`:
 
-```bash
-claude mcp add thehive \
-  --env THEHIVE_URL=http://your-thehive:9000 \
-  --env THEHIVE_API_KEY=your-api-key \
-  -- thehive-mcp
-```
-
-Add `--scope user` to make it available from any directory instead of only the current project.
-
-### OpenClaw
-
-If you're running from a source checkout instead of the npm-installed binary, point `command`/`args` at the built `dist/index.js`:
-
-```bash
-openclaw mcp set thehive '{
-  "command": "node",
-  "args": ["/absolute/path/to/thehive-mcp/dist/index.js"],
-  "env": {
-    "THEHIVE_URL": "http://your-thehive:9000",
-    "THEHIVE_API_KEY": "your-api-key"
+```json
+{
+  "mcpServers": {
+    "thehive": {
+      "command": "npx",
+      "args": ["-y", "thehive-mcp"],
+      "env": {
+        "THEHIVE_URL": "https://192.0.2.10:9000",
+        "THEHIVE_API_KEY": "your-api-key",
+        "THEHIVE_ALLOW_DESTRUCTIVE_TOOLS": "true",
+        "THEHIVE_ENABLE_RAW_QUERY": "true"
+      }
+    }
   }
-}'
+}
 ```
 
-Or, with the global npm install:
+For Claude Desktop, the config file lives at `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows). Per-harness instructions (Claude Code, Codex CLI, OpenClaw, Hermes) are in [Client setup](#client-setup) below.
 
-```bash
-openclaw mcp set thehive '{
-  "command": "thehive-mcp",
-  "env": {
-    "THEHIVE_URL": "http://your-thehive:9000",
-    "THEHIVE_API_KEY": "your-api-key"
-  }
-}'
-```
+## Configuration
 
-Then restart the OpenClaw gateway so the new server is picked up:
+Set environment variables:
 
-```bash
-systemctl --user restart openclaw-gateway
-openclaw mcp list   # confirm "thehive" is registered
-```
-
-### Hermes Agent
-
-[Hermes Agent](https://github.com/NousResearch/hermes-agent) reads MCP config from `~/.hermes/config.yaml` under the `mcp_servers` key. Add an entry:
-
-```yaml
-mcp_servers:
-  thehive:
-    command: "thehive-mcp"
-    env:
-      THEHIVE_URL: "http://your-thehive:9000"
-      THEHIVE_API_KEY: "your-api-key"
-```
-
-Or, when running from a source checkout instead of the global npm install:
-
-```yaml
-mcp_servers:
-  thehive:
-    command: "node"
-    args: ["/absolute/path/to/thehive-mcp/dist/index.js"]
-    env:
-      THEHIVE_URL: "http://your-thehive:9000"
-      THEHIVE_API_KEY: "your-api-key"
-```
-
-Then reload MCP from inside a Hermes session:
-
-```
-/reload-mcp
-```
-
-### Codex CLI
-
-[Codex CLI](https://github.com/openai/codex) registers MCP servers via `codex mcp add`:
-
-```bash
-codex mcp add thehive \
-  --env THEHIVE_URL=http://your-thehive:9000 \
-  --env THEHIVE_API_KEY=your-api-key \
-  -- thehive-mcp
-```
-
-Or, when running from a source checkout:
-
-```bash
-codex mcp add thehive \
-  --env THEHIVE_URL=http://your-thehive:9000 \
-  --env THEHIVE_API_KEY=your-api-key \
-  -- node /absolute/path/to/thehive-mcp/dist/index.js
-```
-
-Codex writes the entry to `~/.codex/config.toml` under `[mcp_servers.thehive]`. Verify with:
-
-```bash
-codex mcp list
-```
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `THEHIVE_URL` | Yes | - | TheHive instance URL using `http` or `https` (e.g. `https://192.0.2.10:9000`) |
+| `THEHIVE_API_KEY` | Yes | - | API key for authentication |
+| `THEHIVE_VERIFY_SSL` | No | `true` | Set to `false` only for trusted lab systems with self-signed TLS. When disabled, TLS verification is relaxed only for TheHive requests (via a scoped dispatcher), not for the whole process |
+| `THEHIVE_TIMEOUT` | No | `30` | Request timeout in seconds (1-300) |
+| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Set to `true` to enable destructive/irreversible MCP tools (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`) |
+| `THEHIVE_ENABLE_RAW_QUERY` | No | `false` | Set to `true` to enable the raw Query DSL MCP tool |
 
 ## Tools
+
+47 tools across cases, alerts, tasks, observables, Cortex, and more. The four destructive tools and the raw query tool are gated behind environment flags as noted.
 
 ### Cases (16 tools)
 
@@ -300,6 +220,108 @@ codex mcp list
 | New Alerts | `thehive://alerts/new` | Unprocessed alerts |
 | Current User | `thehive://user/current` | Authenticated user info |
 
+## Client setup
+
+The [MCP client config](#mcp-client-config) above works for any client that reads the standard `mcpServers` map. The notes below cover clients with their own setup command and the source-checkout variant for each.
+
+### Claude Code
+
+```bash
+claude mcp add thehive \
+  --env THEHIVE_URL=https://192.0.2.10:9000 \
+  --env THEHIVE_API_KEY=your-api-key \
+  -- npx -y thehive-mcp
+```
+
+Add `--scope user` to make it available from any directory instead of only the current project.
+
+### Codex CLI
+
+[Codex CLI](https://github.com/openai/codex) registers MCP servers via `codex mcp add`:
+
+```bash
+codex mcp add thehive \
+  --env THEHIVE_URL=https://192.0.2.10:9000 \
+  --env THEHIVE_API_KEY=your-api-key \
+  -- npx -y thehive-mcp
+```
+
+Codex writes the entry to `~/.codex/config.toml` under `[mcp_servers.thehive]`. Verify with `codex mcp list`.
+
+### OpenClaw
+
+```bash
+openclaw mcp set thehive '{
+  "command": "npx",
+  "args": ["-y", "thehive-mcp"],
+  "env": {
+    "THEHIVE_URL": "https://192.0.2.10:9000",
+    "THEHIVE_API_KEY": "your-api-key"
+  }
+}'
+```
+
+Then restart the gateway and confirm registration:
+
+```bash
+systemctl --user restart openclaw-gateway
+openclaw mcp list
+```
+
+### Hermes Agent
+
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) reads MCP config from `~/.hermes/config.yaml` under the `mcp_servers` key:
+
+```yaml
+mcp_servers:
+  thehive:
+    command: "npx"
+    args: ["-y", "thehive-mcp"]
+    env:
+      THEHIVE_URL: "https://192.0.2.10:9000"
+      THEHIVE_API_KEY: "your-api-key"
+```
+
+Then reload MCP from inside a Hermes session with `/reload-mcp`.
+
+### Source checkout
+
+If you run from a source checkout instead of the npm package, point `command`/`args` at the built `dist/index.js`:
+
+```json
+{
+  "command": "node",
+  "args": ["/absolute/path/to/thehive-mcp/dist/index.js"]
+}
+```
+
+## Why not the TheHive REST API directly?
+
+You can, and for a script you should. The REST API is the right tool when you already know exactly which endpoint you want. thehive-mcp exists for the case where an AI agent is doing the deciding: it turns the API into 47 named, typed, described tools an MCP client can pick from in natural language, handles the TheHive 5 quirks (204 PATCH responses, array-shaped observable creation, connector endpoints under `/api/connector/`), and puts safety rails in front of the irreversible verbs so a model cannot delete or merge case data unless you explicitly opted in. A raw HTTP client gives you none of that.
+
+## Why not a generic OpenAPI-to-MCP bridge?
+
+A generic bridge exposes every endpoint flat, with no notion of which calls are dangerous and no awareness of TheHive 5's behavioral edges. thehive-mcp is hand-built for TheHive: destructive tools are gated, the raw Query DSL is gated and shape-checked, TLS relaxation is scoped to TheHive requests only, sensitive values are redacted from error output, and the tool descriptions carry the correct TheHive 5 status enums (TruePositive, FalsePositive, and so on, not the old "Resolved"). Those are decisions a generic bridge cannot make for you.
+
+## What thehive-mcp is not
+
+- It is not a replacement for TheHive. You need a running TheHive 5 instance and a valid API key; this server only talks to one.
+- It is not a hosted service or daemon. It is a stdio process your MCP client launches on demand. Nothing listens on a port and nothing phones home.
+- It is not a Cortex server. It drives Cortex analyzers through TheHive's connector, but analyzer execution happens in your own Cortex deployment. For a dedicated Cortex MCP server, see [cortex-mcp](https://lidless.dev/cortex-mcp).
+- It is not safe-by-omission. Destructive tools exist; they are gated, not removed. Turning on `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` hands an agent the ability to delete and merge real case data.
+
+## TheHive 5 notes
+
+- **Organizations matter.** The `admin` org only has platform permissions. Create a separate org (e.g. "SOC") with an `org-admin` user for full case/alert/task/observable access.
+- **Case statuses changed in v5.** Closed statuses are: TruePositive, FalsePositive, Indeterminate, Duplicated, Other. There is no "Resolved" status.
+- **PATCH returns 204.** Update operations return no body; the client re-fetches the entity automatically.
+- **Observable creation returns arrays.** The client handles this transparently. Bulk creation uses `data` as an array.
+- **Cortex connector endpoints** live under `/api/connector/` not `/api/v1/`.
+- **`description` is required** when creating cases and alerts.
+- **Destructive MCP tools are gated.** `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases` (irreversible), and `thehive_promote_alert` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`.
+- **Raw query is gated.** `thehive_query` requires `THEHIVE_ENABLE_RAW_QUERY=true`.
+- **SSL verification is scoped.** Setting `THEHIVE_VERIFY_SSL=false` relaxes TLS certificate validation only for requests to TheHive (via a per-client undici dispatcher) and never disables it process-wide. A warning is logged to stderr when enabled.
+
 ## Development
 
 ```bash
@@ -313,33 +335,26 @@ npm run build
 npm test
 
 # Run read-only live integration tests (skips when env vars are missing)
-THEHIVE_URL=http://your-thehive:9000 THEHIVE_API_KEY=your-key npx tsx scripts/live-test.ts
+THEHIVE_URL=https://192.0.2.10:9000 THEHIVE_API_KEY=your-key npx tsx scripts/live-test.ts
 
 # Run live write tests
-THEHIVE_URL=http://your-thehive:9000 THEHIVE_API_KEY=your-key THEHIVE_LIVE_ALLOW_WRITES=true npx tsx scripts/live-test.ts
+THEHIVE_URL=https://192.0.2.10:9000 THEHIVE_API_KEY=your-key THEHIVE_LIVE_ALLOW_WRITES=true npx tsx scripts/live-test.ts
 
 # Run live write tests with destructive cleanup, deletes, and merge checks
-THEHIVE_URL=http://your-thehive:9000 THEHIVE_API_KEY=your-key THEHIVE_LIVE_ALLOW_WRITES=true THEHIVE_LIVE_ALLOW_DESTRUCTIVE=true npx tsx scripts/live-test.ts
+THEHIVE_URL=https://192.0.2.10:9000 THEHIVE_API_KEY=your-key THEHIVE_LIVE_ALLOW_WRITES=true THEHIVE_LIVE_ALLOW_DESTRUCTIVE=true npx tsx scripts/live-test.ts
 
 # Type check
 npm run typecheck
 
 # Development mode
-THEHIVE_URL=http://your-thehive:9000 THEHIVE_API_KEY=your-key npm run dev
+THEHIVE_URL=https://192.0.2.10:9000 THEHIVE_API_KEY=your-key npm run dev
 ```
 
-## TheHive 5 Notes
+## Contributing
 
-- **Organizations matter.** The `admin` org only has platform permissions. Create a separate org (e.g. "SOC") with an `org-admin` user for full case/alert/task/observable access.
-- **Case statuses changed in v5.** Closed statuses are: TruePositive, FalsePositive, Indeterminate, Duplicated, Other. There is no "Resolved" status.
-- **PATCH returns 204.** Update operations return no body; the client re-fetches the entity automatically.
-- **Observable creation returns arrays.** The client handles this transparently. Bulk creation uses `data` as an array.
-- **Cortex connector endpoints** live under `/api/connector/` not `/api/v1/`.
-- **`description` is required** when creating cases and alerts.
-- **Destructive MCP tools are gated.** `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases` (irreversible), and `thehive_promote_alert` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`.
-- **Raw query is gated.** `thehive_query` requires `THEHIVE_ENABLE_RAW_QUERY=true`.
-- **SSL verification is scoped.** Setting `THEHIVE_VERIFY_SSL=false` relaxes TLS certificate validation only for requests to TheHive (via a per-client undici dispatcher) and never disables it process-wide. A warning is logged to stderr when enabled.
+Bug reports and patches are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for what lands easily, [SECURITY.md](SECURITY.md) for reporting vulnerabilities, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Issue templates are under [.github/ISSUE_TEMPLATE](.github/ISSUE_TEMPLATE).
 
 ## License
 
-MIT
+[MIT](LICENSE)
+</content>

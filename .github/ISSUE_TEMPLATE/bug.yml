@@ -1,0 +1,58 @@
+name: Bug report
+description: Something is broken in thehive-mcp itself, such as a tool, the client, config parsing, or the docs.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Which tool or behavior, and what did you expect versus what you got?
+      placeholder: |
+        I called `thehive_create_case` from my MCP client and got X.
+        I expected Y.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: thehive-mcp version
+      description: The version you installed (from `npm ls thehive-mcp` or your config).
+      placeholder: 1.2.0
+    validations:
+      required: true
+  - type: input
+    id: thehive-version
+    attributes:
+      label: TheHive version
+      placeholder: TheHive 5.4.11
+    validations:
+      required: false
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      placeholder: 20.11.0
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: MCP client
+      placeholder: Claude Desktop, Claude Code, Codex CLI, OpenClaw, Hermes, etc.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Full output
+      description: Paste the full stdout + stderr. Redact your API key, real hostnames, and personal paths, but keep enough for us to reproduce.
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: scrub
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I have removed my API key, real TheHive URL, private hostnames, and personal paths from this report.
+          required: true
