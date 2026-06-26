@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Lidless Labs (all the MCP servers)
+    url: https://lidless.dev
+    about: thehive-mcp is one of the Lidless Labs MCP servers for security operations. Browse the rest there.
+  - name: thehive-mcp on the web
+    url: https://lidless.dev/thehive-mcp
+    about: Overview, tool list, and client setup for this server.
+  - name: Security report
+    url: https://github.com/lidless-labs/thehive-mcp/security/policy
+    about: Do not file security issues publicly. See SECURITY.md.
