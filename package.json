@@ -35,11 +35,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/solomonneas/thehive-mcp.git"
+    "url": "https://github.com/lidless-labs/thehive-mcp.git"
   },
-  "homepage": "https://github.com/solomonneas/thehive-mcp#readme",
+  "homepage": "https://github.com/lidless-labs/thehive-mcp#readme",
   "bugs": {
-    "url": "https://github.com/solomonneas/thehive-mcp/issues"
+    "url": "https://github.com/lidless-labs/thehive-mcp/issues"
   },
   "files": [
     "dist",
