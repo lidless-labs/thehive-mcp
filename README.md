@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/thehive-mcp-banner.jpg" alt="thehive-mcp banner" width="100%" />
+  <img src="docs/assets/thehive-mcp-banner.jpg" alt="thehive-mcp banner" width="900">
 </p>
 
 <h1 align="center">thehive-mcp</h1>
@@ -9,14 +9,14 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/thehive-mcp"><img src="https://img.shields.io/npm/v/thehive-mcp?style=for-the-badge&logo=npm&color=cb3837&label=npm" alt="npm version" /></a>
-  <a href="https://github.com/lidless-labs/thehive-mcp/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/lidless-labs/thehive-mcp/ci.yml?branch=main&style=for-the-badge&label=CI&logo=github" alt="CI status" /></a>
-  <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP-server-6f42c1?style=for-the-badge" alt="MCP server" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="MIT license" /></a>
+  <strong>Website: <a href="https://lidless.dev/thehive-mcp">lidless.dev/thehive-mcp</a></strong>
 </p>
 
 <p align="center">
-  <strong>Website: <a href="https://lidless.dev/thehive-mcp">lidless.dev/thehive-mcp</a></strong>
+  <img src="https://img.shields.io/npm/v/thehive-mcp?style=for-the-badge&logo=npm&label=npm" alt="npm version">
+  <img src="https://img.shields.io/github/actions/workflow/status/lidless-labs/thehive-mcp/ci.yml?branch=main&style=for-the-badge&label=ci" alt="ci">
+  <img src="https://img.shields.io/badge/MCP-server-8A2BE2?style=for-the-badge" alt="MCP server">
+  <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="MIT license">
 </p>
 
 thehive-mcp is a Model Context Protocol server for [TheHive](https://thehive-project.org/), the open-source security incident response platform. It lets an AI client run the SOC workflow end to end: open and triage cases, promote alerts, track observables, drive tasks, and run Cortex analyzers, all through one stdio process. It differs from a generic REST wrapper because the dangerous verbs (delete, merge, promote, raw query) ship disabled and only turn on behind explicit environment flags, so an agent cannot quietly destroy case data.
@@ -84,19 +84,6 @@ To enable the gated destructive tools and the raw Query DSL tool, add them to `e
 ```
 
 For Claude Desktop, the config file lives at `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows). Per-harness instructions (Claude Code, Codex CLI, OpenClaw, Hermes) are in [Client setup](#client-setup) below.
-
-## Configuration
-
-Set environment variables:
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `THEHIVE_URL` | Yes | - | TheHive instance URL using `http` or `https` (e.g. `https://192.0.2.10:9000`) |
-| `THEHIVE_API_KEY` | Yes | - | API key for authentication |
-| `THEHIVE_VERIFY_SSL` | No | `true` | Set to `false` only for trusted lab systems with self-signed TLS. When disabled, TLS verification is relaxed only for TheHive requests (via a scoped dispatcher), not for the whole process |
-| `THEHIVE_TIMEOUT` | No | `30` | Request timeout in seconds (1-300) |
-| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Set to `true` to enable destructive/irreversible MCP tools (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`) |
-| `THEHIVE_ENABLE_RAW_QUERY` | No | `false` | Set to `true` to enable the raw Query DSL MCP tool |
 
 ## Tools
 
@@ -204,6 +191,19 @@ Set environment variables:
 |------|-------------|
 | `thehive_status` | Get server health, version, and capabilities |
 
+## Configuration
+
+Set environment variables:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `THEHIVE_URL` | Yes | - | TheHive instance URL using `http` or `https` (e.g. `https://192.0.2.10:9000`) |
+| `THEHIVE_API_KEY` | Yes | - | API key for authentication |
+| `THEHIVE_VERIFY_SSL` | No | `true` | Set to `false` only for trusted lab systems with self-signed TLS. When disabled, TLS verification is relaxed only for TheHive requests (via a scoped dispatcher), not for the whole process |
+| `THEHIVE_TIMEOUT` | No | `30` | Request timeout in seconds (1-300) |
+| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Set to `true` to enable destructive/irreversible MCP tools (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`) |
+| `THEHIVE_ENABLE_RAW_QUERY` | No | `false` | Set to `true` to enable the raw Query DSL MCP tool |
+
 ## Prompt Templates
 
 | Prompt | Description |
@@ -295,6 +295,18 @@ If you run from a source checkout instead of the npm package, point `command`/`a
 }
 ```
 
+## TheHive 5 notes
+
+- **Organizations matter.** The `admin` org only has platform permissions. Create a separate org (e.g. "SOC") with an `org-admin` user for full case/alert/task/observable access.
+- **Case statuses changed in v5.** Closed statuses are: TruePositive, FalsePositive, Indeterminate, Duplicated, Other. There is no "Resolved" status.
+- **PATCH returns 204.** Update operations return no body; the client re-fetches the entity automatically.
+- **Observable creation returns arrays.** The client handles this transparently. Bulk creation uses `data` as an array.
+- **Cortex connector endpoints** live under `/api/connector/` not `/api/v1/`.
+- **`description` is required** when creating cases and alerts.
+- **Destructive MCP tools are gated.** `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases` (irreversible), and `thehive_promote_alert` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`.
+- **Raw query is gated.** `thehive_query` requires `THEHIVE_ENABLE_RAW_QUERY=true`.
+- **SSL verification is scoped.** Setting `THEHIVE_VERIFY_SSL=false` relaxes TLS certificate validation only for requests to TheHive (via a per-client undici dispatcher) and never disables it process-wide. A warning is logged to stderr when enabled.
+
 ## Why not the TheHive REST API directly?
 
 You can, and for a script you should. The REST API is the right tool when you already know exactly which endpoint you want. thehive-mcp exists for the case where an AI agent is doing the deciding: it turns the API into 47 named, typed, described tools an MCP client can pick from in natural language, handles the TheHive 5 quirks (204 PATCH responses, array-shaped observable creation, connector endpoints under `/api/connector/`), and puts safety rails in front of the irreversible verbs so a model cannot delete or merge case data unless you explicitly opted in. A raw HTTP client gives you none of that.
@@ -309,18 +321,6 @@ A generic bridge exposes every endpoint flat, with no notion of which calls are 
 - It is not a hosted service or daemon. It is a stdio process your MCP client launches on demand. Nothing listens on a port and nothing phones home.
 - It is not a Cortex server. It drives Cortex analyzers through TheHive's connector, but analyzer execution happens in your own Cortex deployment. For a dedicated Cortex MCP server, see [cortex-mcp](https://lidless.dev/cortex-mcp).
 - It is not safe-by-omission. Destructive tools exist; they are gated, not removed. Turning on `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` hands an agent the ability to delete and merge real case data.
-
-## TheHive 5 notes
-
-- **Organizations matter.** The `admin` org only has platform permissions. Create a separate org (e.g. "SOC") with an `org-admin` user for full case/alert/task/observable access.
-- **Case statuses changed in v5.** Closed statuses are: TruePositive, FalsePositive, Indeterminate, Duplicated, Other. There is no "Resolved" status.
-- **PATCH returns 204.** Update operations return no body; the client re-fetches the entity automatically.
-- **Observable creation returns arrays.** The client handles this transparently. Bulk creation uses `data` as an array.
-- **Cortex connector endpoints** live under `/api/connector/` not `/api/v1/`.
-- **`description` is required** when creating cases and alerts.
-- **Destructive MCP tools are gated.** `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases` (irreversible), and `thehive_promote_alert` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`.
-- **Raw query is gated.** `thehive_query` requires `THEHIVE_ENABLE_RAW_QUERY=true`.
-- **SSL verification is scoped.** Setting `THEHIVE_VERIFY_SSL=false` relaxes TLS certificate validation only for requests to TheHive (via a per-client undici dispatcher) and never disables it process-wide. A warning is logged to stderr when enabled.
 
 ## Development
 
