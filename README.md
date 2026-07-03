@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/thehive-mcp-banner.jpg" alt="thehive-mcp banner" width="900">
+  <img src="docs/assets/thehive-mcp-social-preview.jpg" alt="thehive-mcp banner" width="900">
 </p>
 
 <h1 align="center">thehive-mcp</h1>
@@ -13,8 +13,8 @@
 </p>
 
 <p align="center">
-  <img src="https://shieldcn.dev/npm/thehive-mcp.svg" alt="npm version">
   <img src="https://shieldcn.dev/github/ci/lidless-labs/thehive-mcp.svg?branch=main&workflow=ci.yml" alt="ci">
+  <img src="https://shieldcn.dev/npm/thehive-mcp.svg" alt="npm version">
   <img src="https://shieldcn.dev/badge/MCP-server-8A2BE2.svg" alt="MCP server">
   <img src="https://shieldcn.dev/badge/license-MIT-green.svg" alt="MIT license">
 </p>
