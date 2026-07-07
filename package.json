@@ -1,13 +1,13 @@
 {
   "name": "thehive-mcp",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "TheHive incident-response control CLI with an MCP adapter",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "thehivectrl": "./dist/cli.js",
-    "thehivectl": "./dist/cli.js",
-    "thehive-mcp": "./dist/mcp-bin.js"
+    "thehivectrl": "dist/cli.js",
+    "thehivectl": "dist/cli.js",
+    "thehive-mcp": "dist/mcp-bin.js"
   },
   "scripts": {
     "build": "tsup",
@@ -37,7 +37,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lidless-labs/thehive-mcp.git"
+    "url": "git+https://github.com/lidless-labs/thehive-mcp.git"
   },
   "homepage": "https://github.com/lidless-labs/thehive-mcp#readme",
   "bugs": {
