@@ -5,7 +5,7 @@
 <h1 align="center">thehive-mcp</h1>
 
 <p align="center">
-  <strong>An MCP server that gives an AI client full read-write control of TheHive: cases, alerts, tasks, observables, and Cortex analyzers, over stdio with destructive actions gated off by default.</strong>
+  <strong>A TheHive incident-response control CLI and MCP adapter for cases, alerts, tasks, observables, and Cortex analyzers, with destructive actions gated off by default.</strong>
 </p>
 
 <p align="center">
@@ -19,11 +19,11 @@
   <img src="https://shieldcn.dev/badge/license-MIT-green.svg" alt="MIT license">
 </p>
 
-thehive-mcp is a Model Context Protocol server for [TheHive](https://thehive-project.org/), the open-source security incident response platform. It lets an AI client run the SOC workflow end to end: open and triage cases, promote alerts, track observables, drive tasks, and run Cortex analyzers, all through one stdio process. It differs from a generic REST wrapper because the dangerous verbs (delete, merge, promote, raw query) ship disabled and only turn on behind explicit environment flags, so an agent cannot quietly destroy case data.
+thehivectrl is a control CLI for [TheHive](https://thehive-project.org/), the open-source security incident response platform. The same package ships `thehive-mcp`, a Model Context Protocol adapter that lets an AI client run the SOC workflow end to end: open and triage cases, promote alerts, track observables, drive tasks, and run Cortex analyzers, all through one stdio process. It differs from a generic REST wrapper because the dangerous verbs (delete, merge, promote, raw query) ship disabled and only turn on behind explicit environment flags, so an agent cannot quietly destroy case data.
 
 ## What it does
 
-thehive-mcp is an MCP server for **TheHive** incident response and case management. It exposes 47 Model Context Protocol tools that map onto the full TheHive 5 API surface, so an MCP client (Claude Desktop, Claude Code, Codex CLI, OpenClaw, Hermes, or any other) can drive a security operations center: create and triage cases, manage alerts, add and search observables, run and poll Cortex analyzers, file task logs and comments, and orchestrate SOAR-style incident response workflows in plain language. It talks to your TheHive instance over its REST API and speaks MCP over stdio, so it slots into any agent that supports the protocol with no extra service to run.
+thehivectrl and thehive-mcp expose **TheHive** incident response and case management for shells and MCP clients. The MCP adapter exposes 47 Model Context Protocol tools that map onto the full TheHive 5 API surface, so an MCP client (Claude Desktop, Claude Code, Codex CLI, OpenClaw, Hermes, or any other) can drive a security operations center: create and triage cases, manage alerts, add and search observables, run and poll Cortex analyzers, file task logs and comments, and orchestrate SOAR-style incident response workflows in plain language. The CLI starts with read-only status, case inventory, case lookup, and alert inventory for shells, cron, and CI.
 
 The differentiator is safety. Irreversible operations (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`) and the raw Query DSL tool are gated off by default and only become callable when you opt in with an environment variable. TLS relaxation is scoped to TheHive requests only, never the whole process. The server is tested against a live **TheHive 5.4.11** instance across read, write, and destructive workflows.
 
@@ -44,6 +44,20 @@ npx -y thehive-mcp
 ```
 
 The server speaks MCP over stdio, so it is meant to be launched by an MCP client rather than run by hand. The client config below is the normal entry point.
+
+## CLI
+
+The package ships `thehivectrl` for shells, cron, and CI. Compatibility alias `thehivectl` points at the same binary, and `thehive-mcp` remains the MCP stdio adapter.
+
+```bash
+thehivectrl status --json
+thehivectrl cases list --limit 20
+thehivectrl cases get "~123456"
+thehivectrl alerts list --source Wazuh
+thehivectrl mcp
+```
+
+`thehivectrl` reads the same environment as the MCP adapter: `THEHIVE_URL`, `THEHIVE_API_KEY`, optional `THEHIVE_VERIFY_SSL`, and optional timeout and safety flags. The first CLI slice is read-only. Future destructive commands must require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` plus `--confirm --destructive`; future raw query commands must require `THEHIVE_ENABLE_RAW_QUERY=true` plus `--confirm-raw`.
 
 ### MCP client config
 
@@ -286,12 +300,12 @@ Then reload MCP from inside a Hermes session with `/reload-mcp`.
 
 ### Source checkout
 
-If you run from a source checkout instead of the npm package, point `command`/`args` at the built `dist/index.js`:
+If you run from a source checkout instead of the npm package, point `command`/`args` at the built `dist/mcp-bin.js`:
 
 ```json
 {
   "command": "node",
-  "args": ["/absolute/path/to/thehive-mcp/dist/index.js"]
+  "args": ["/absolute/path/to/thehive-mcp/dist/mcp-bin.js"]
 }
 ```
 

@@ -115,7 +115,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/thehive-mcp
-ExecStart=/usr/bin/node dist/index.js
+ExecStart=/usr/bin/node dist/mcp-bin.js
 Restart=on-failure
 RestartSec=10
 EnvironmentFile=/opt/thehive-mcp/.env

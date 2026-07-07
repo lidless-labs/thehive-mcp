@@ -8,6 +8,7 @@ describe("Proxmox installer", () => {
     expect(proxmoxInstaller).toContain("https://github.com/solomonneas/thehive-mcp.git");
     expect(proxmoxInstaller).toContain("/opt/thehive-mcp");
     expect(proxmoxInstaller).toContain("thehive-mcp.service");
+    expect(proxmoxInstaller).toContain("ExecStart=/usr/bin/node dist/mcp-bin.js");
     expect(proxmoxInstaller).not.toContain("thehive-mcp-ts");
   });
 
