@@ -1,13 +1,13 @@
 {
   "name": "thehive-mcp",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "TheHive incident-response control CLI with an MCP adapter",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "thehivectrl": "dist/cli.js",
-    "thehivectl": "dist/cli.js",
-    "thehive-mcp": "dist/mcp-bin.js"
+    "thehivectrl": "./dist/cli.js",
+    "thehivectl": "./dist/cli.js",
+    "thehive-mcp": "./dist/mcp-bin.js"
   },
   "scripts": {
     "build": "tsup",
