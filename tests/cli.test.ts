@@ -41,9 +41,9 @@ describe("thehivectrl CLI", () => {
     expect(HELP).toContain("thehivectrl - TheHive incident-response control CLI");
     expect(HELP).toContain("alias: thehivectl");
     expect(packageJson.bin).toMatchObject({
-      thehivectrl: "dist/cli.js",
-      thehivectl: "dist/cli.js",
-      "thehive-mcp": "dist/mcp-bin.js",
+      thehivectrl: "./dist/cli.js",
+      thehivectl: "./dist/cli.js",
+      "thehive-mcp": "./dist/mcp-bin.js",
     });
   });
 
