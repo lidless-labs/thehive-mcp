@@ -27,6 +27,10 @@ thehive-mcp is an MCP server for **TheHive** incident response and case manageme
 
 The differentiator is safety. Irreversible operations (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`) and the raw Query DSL tool are gated off by default and only become callable when you opt in with an environment variable. TLS relaxation is scoped to TheHive requests only, never the whole process. The server is tested against a live **TheHive 5.4.11** instance across read, write, and destructive workflows.
 
+![thehive-mcp case triage workflow: alert intake becomes case work, tasks and observables feed Cortex analysis, and destructive actions stay behind explicit gates](docs/assets/case-triage-workflow.svg)
+
+Generated from [`docs/assets/workflows/case-triage.json`](docs/assets/workflows/case-triage.json) with the [Lidless fleet-kit workflow renderer](https://github.com/lidless-labs/lidless-fleet-kit/tree/main/workflow).
+
 ## Quickstart
 
 Run it straight from npm, no global install needed:

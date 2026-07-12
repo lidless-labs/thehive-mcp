@@ -1,0 +1,28 @@
+{
+  "kicker": "THEHIVE-MCP · CASE TRIAGE",
+  "title": "move from alert intake to case work with gates",
+  "subtitle": "Read and write case work is available through typed tools, while destructive actions and raw query stay off until explicitly enabled.",
+  "footer": "cases · alerts · observables · destructive gates",
+  "lanes": [
+    { "id": "intake", "label": "INTAKE" },
+    { "id": "casework", "label": "CASE WORK" },
+    { "id": "analysis", "label": "ANALYSIS" },
+    { "id": "gate", "label": "GATE" }
+  ],
+  "nodes": [
+    { "id": "alert", "lane": "intake", "row": 0, "title": "alert or case", "meta": "list, search, promote", "status": "source" },
+    { "id": "case", "lane": "casework", "row": 0, "title": "triage case", "meta": "severity, tags, owner", "status": "focus" },
+    { "id": "tasks", "lane": "casework", "row": 1, "title": "tasks and logs", "meta": "comments, timeline, status" },
+    { "id": "observables", "lane": "analysis", "row": 0, "title": "observables", "meta": "IOCs, files, links" },
+    { "id": "cortex", "lane": "analysis", "row": 1, "title": "run analyzers", "meta": "Cortex jobs and reports" },
+    { "id": "destructive", "lane": "gate", "row": 0, "title": "destructive off", "meta": "delete, merge, raw query", "status": "gate" }
+  ],
+  "edges": [
+    { "from": "alert", "to": "case" },
+    { "from": "case", "to": "tasks" },
+    { "from": "case", "to": "observables" },
+    { "from": "observables", "to": "cortex" },
+    { "from": "case", "to": "destructive" },
+    { "from": "cortex", "to": "destructive" }
+  ]
+}
