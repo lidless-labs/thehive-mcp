@@ -20,6 +20,31 @@ function mockFetch(data: unknown, status = 200) {
   });
 }
 
+function mockSlowFetch(delayMs = 5000) {
+  return vi.fn().mockImplementation(
+    (_url: string, options: RequestInit) =>
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({}),
+            text: () => Promise.resolve("{}"),
+          });
+        }, delayMs);
+
+        options.signal?.addEventListener("abort", () => {
+          clearTimeout(timer);
+          const err = new DOMException(
+            "The operation was aborted.",
+            "AbortError",
+          );
+          reject(err);
+        });
+      }),
+  );
+}
+
 describe("TheHiveClient", () => {
   let client: TheHiveClient;
   const originalFetch = globalThis.fetch;
@@ -609,25 +634,213 @@ describe("TheHiveClient", () => {
 
     it("should handle timeout", async () => {
       const slowClient = new TheHiveClient({ ...mockConfig, timeout: 1 });
-      globalThis.fetch = vi.fn().mockImplementation(
-        (_url: string, options: RequestInit) =>
-          new Promise((resolve, reject) => {
-            const timer = setTimeout(() => {
-              resolve({
-                ok: true,
-                json: () => Promise.resolve({}),
-              });
-            }, 5000);
-
-            options.signal?.addEventListener("abort", () => {
-              clearTimeout(timer);
-              const err = new DOMException("The operation was aborted.", "AbortError");
-              reject(err);
-            });
-          }),
-      );
+      globalThis.fetch = mockSlowFetch();
 
       await expect(slowClient.getCase("~1")).rejects.toThrow("timeout");
+    });
+  });
+
+  describe("HTTP request path", () => {
+    describe("timeout behavior", () => {
+      it("should pass an AbortSignal to fetch", async () => {
+        globalThis.fetch = mockFetch({ _id: "~1" });
+
+        await client.getCase("~1");
+
+        const [, options] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+          .calls[0];
+        expect(options.signal).toBeInstanceOf(AbortSignal);
+      });
+
+      it("should include the configured timeout duration in timeout errors", async () => {
+        vi.useFakeTimers();
+        try {
+          const timedClient = new TheHiveClient({ ...mockConfig, timeout: 2500 });
+          globalThis.fetch = mockSlowFetch(5000);
+
+          const promise = timedClient.getCase("~1");
+          const expectation = expect(promise).rejects.toThrow(
+            "TheHive API timeout after 2500ms",
+          );
+          await vi.advanceTimersByTimeAsync(2500);
+          await expectation;
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("should abort the request when the configured timeout elapses", async () => {
+        vi.useFakeTimers();
+        try {
+          const timedClient = new TheHiveClient({ ...mockConfig, timeout: 100 });
+          globalThis.fetch = mockSlowFetch(5000);
+
+          const promise = timedClient.getCase("~1");
+          const expectation = expect(promise).rejects.toThrow(
+            "TheHive API timeout after 100ms",
+          );
+          await vi.advanceTimersByTimeAsync(100);
+          await expectation;
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("should clear the timeout timer after a successful response", async () => {
+        const clearTimeoutSpy = vi.spyOn(global, "clearTimeout");
+        globalThis.fetch = mockFetch({ _id: "~1" });
+
+        await client.getCase("~1");
+
+        expect(clearTimeoutSpy).toHaveBeenCalled();
+        clearTimeoutSpy.mockRestore();
+      });
+
+      it("should clear the timeout timer after a failed response", async () => {
+        const clearTimeoutSpy = vi.spyOn(global, "clearTimeout");
+        globalThis.fetch = mockFetch({ message: "Not Found" }, 404);
+
+        await expect(client.getCase("~1")).rejects.toThrow("not found");
+        expect(clearTimeoutSpy).toHaveBeenCalled();
+        clearTimeoutSpy.mockRestore();
+      });
+    });
+
+    describe("error-to-response mapping", () => {
+      it("should throw on 429 rate limit", async () => {
+        globalThis.fetch = mockFetch({ message: "Too Many Requests" }, 429);
+
+        await expect(client.getCase("~1")).rejects.toThrow("rate limit");
+      });
+
+      it("should use a generic message for unmapped status codes", async () => {
+        globalThis.fetch = mockFetch({ message: "Bad Gateway" }, 502);
+
+        await expect(client.getCase("~1")).rejects.toThrow(
+          "TheHive API error (502)",
+        );
+      });
+
+      it("should append sanitized error body detail to HTTP error messages", async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue({
+          ok: false,
+          status: 400,
+          text: () => Promise.resolve("invalid case id"),
+        });
+
+        await expect(client.getCase("~1")).rejects.toThrow(
+          "TheHive API error (400): invalid case id",
+        );
+      });
+
+      it("should collapse whitespace in error body detail", async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue({
+          ok: false,
+          status: 400,
+          text: () => Promise.resolve("  invalid   case   id  "),
+        });
+
+        await expect(client.getCase("~1")).rejects.toThrow(
+          ": invalid case id",
+        );
+      });
+
+      it("should truncate long error bodies to 200 characters", async () => {
+        const longBody = "x".repeat(250);
+        globalThis.fetch = vi.fn().mockResolvedValue({
+          ok: false,
+          status: 400,
+          text: () => Promise.resolve(longBody),
+        });
+
+        const error = await client.getCase("~1").catch((err: Error) => err);
+        expect(error.message).toContain(`: ${"x".repeat(200)}`);
+        expect(error.message).not.toContain("x".repeat(201));
+      });
+
+      it("should redact sensitive JSON fields in error detail", async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue({
+          ok: false,
+          status: 500,
+          text: () =>
+            Promise.resolve('{"api_key":"leaked-secret","message":"failed"}'),
+        });
+
+        const error = await client.getCase("~1").catch((err: Error) => err);
+        expect(error.message).toContain("[REDACTED]");
+        expect(error.message).not.toContain("leaked-secret");
+      });
+
+      it("should omit detail when the error response body cannot be read", async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue({
+          ok: false,
+          status: 500,
+          text: () => Promise.reject(new Error("read failed")),
+        });
+
+        const error = await client.getCase("~1").catch((err: Error) => err);
+        expect(error.message).toBe("TheHive API internal server error");
+      });
+
+      it("should return an empty object for 204 No Content responses", async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 204,
+          text: () => Promise.resolve(""),
+        });
+
+        const result = await client.getCase("~1");
+
+        expect(result).toEqual({});
+      });
+
+      it("should return an empty object for successful responses with empty bodies", async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(""),
+        });
+
+        const result = await client.getCase("~1");
+
+        expect(result).toEqual({});
+      });
+    });
+
+    describe("abort semantics", () => {
+      it("should map DOMException AbortError to a timeout error", async () => {
+        globalThis.fetch = vi.fn().mockRejectedValue(
+          new DOMException("The operation was aborted.", "AbortError"),
+        );
+
+        await expect(client.getCase("~1")).rejects.toThrow(
+          "TheHive API timeout after 30000ms",
+        );
+      });
+
+      it("should map Error AbortError to a timeout error", async () => {
+        const abortError = new Error("The operation was aborted.");
+        abortError.name = "AbortError";
+        globalThis.fetch = vi.fn().mockRejectedValue(abortError);
+
+        await expect(client.getCase("~1")).rejects.toThrow(
+          "TheHive API timeout after 30000ms",
+        );
+      });
+
+      it("should rethrow non-abort fetch errors unchanged", async () => {
+        const networkError = new TypeError("fetch failed");
+        globalThis.fetch = vi.fn().mockRejectedValue(networkError);
+
+        await expect(client.getCase("~1")).rejects.toBe(networkError);
+      });
+
+      it("should not map non-Error abort-like rejections to timeout errors", async () => {
+        const abortLike = { name: "AbortError" };
+        globalThis.fetch = vi.fn().mockRejectedValue(abortLike);
+
+        await expect(client.getCase("~1")).rejects.toEqual(abortLike);
+      });
     });
   });
 });
