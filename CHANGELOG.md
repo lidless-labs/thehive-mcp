@@ -2,7 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+- `thehive_bulk_assign_cases` and `thehive_bulk_close_cases` now require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`, matching the other tools that change many records at once.
+- Bulk case tools issue at most 5 concurrent upstream requests.
+- Tool text output is capped at 100,000 characters and upstream response bodies at 10 MB, with a clear message when a cap applies.
+
 ### Added
+- All 47 tools declare MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
 - **`thehive_list_responders`**, **`thehive_run_responder`**, and **`thehive_list_actions`** - Cortex responder support. `thehive_run_responder` is gated behind `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS`
 
 ### Documentation

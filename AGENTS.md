@@ -17,7 +17,8 @@ Report the actual results. If anything fails, paste the failure verbatim and do 
 ## Live-Instance Prohibitions
 TheHive holds real incident-response data. Treat every configured instance as production.
 - During development or review: never run write or destructive tools against a live instance unless the user explicitly asks for that operation in this session. Read-only calls only.
-- Adding a tool that deletes, merges, promotes, or mutates broadly: gate it behind `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` via `src/tools/safety.ts`. Existing gated tools: `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`, `thehive_run_responder`.
+- Adding a tool that deletes, merges, promotes, or mutates broadly: gate it behind `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` via `src/tools/safety.ts`. Existing gated tools: `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`, `thehive_run_responder`, `thehive_bulk_assign_cases`, `thehive_bulk_close_cases`.
+- Every tool passes a preset from `src/tools/annotations.ts` as its annotations argument, wraps JSON results in `formatJson` from `src/tools/output.ts`, and runs fan-out upstream calls through `settleWithConcurrency`.
 - Adding a tool that accepts raw Query DSL: gate it behind `THEHIVE_ENABLE_RAW_QUERY` (as `thehive_query` is). Never loosen either gate's default-off behavior.
 - Touching TLS handling: `THEHIVE_VERIFY_SSL=false` must only relax TLS for TheHive requests via the per-instance undici dispatcher in `src/client.ts`. Never disable TLS process-wide and never remove the scoped dispatcher.
 

@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
+import { formatJson } from "./output.js";
+import { CREATE, DESTRUCTIVE, READ_ONLY, UPDATE } from "./annotations.js";
 import { destructiveToolDisabled, type ToolSafetyOptions } from "./safety.js";
 
 const alertStatusSchema = z.enum(["New", "Updated", "Ignored", "Imported"]);
@@ -45,6 +47,7 @@ export function registerAlertTools(
         .optional()
         .describe("Maximum number of results (default: 50, max: 500)"),
     },
+    READ_ONLY,
     async ({ status, severity, tags, source, type, limit }) => {
       try {
         const alerts = await client.listAlerts({
@@ -59,7 +62,7 @@ export function registerAlertTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(alerts, null, 2),
+              text: formatJson(alerts),
             },
           ],
         };
@@ -83,6 +86,7 @@ export function registerAlertTools(
     {
       alertId: z.string().describe("The alert ID"),
     },
+    READ_ONLY,
     async ({ alertId }) => {
       try {
         const alert = await client.getAlert(alertId);
@@ -90,7 +94,7 @@ export function registerAlertTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(alert, null, 2),
+              text: formatJson(alert),
             },
           ],
         };
@@ -156,6 +160,7 @@ export function registerAlertTools(
         .optional()
         .describe("Case template to use when promoting to case"),
     },
+    CREATE,
     async ({ title, type, source, sourceRef, description, severity, tlp, pap, tags, follow, caseTemplate }) => {
       try {
         const created = await client.createAlert({
@@ -175,7 +180,7 @@ export function registerAlertTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(created, null, 2),
+              text: formatJson(created),
             },
           ],
         };
@@ -222,6 +227,7 @@ export function registerAlertTools(
         .optional()
         .describe("Whether to follow the alert"),
     },
+    UPDATE,
     async ({ alertId, ...data }) => {
       try {
         const updated = await client.updateAlert(alertId, data);
@@ -229,7 +235,7 @@ export function registerAlertTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(updated, null, 2),
+              text: formatJson(updated),
             },
           ],
         };
@@ -253,6 +259,7 @@ export function registerAlertTools(
     {
       alertId: z.string().describe("The alert ID to promote to a case"),
     },
+    DESTRUCTIVE,
     async ({ alertId }) => {
       if (!options.allowDestructiveTools) {
         return destructiveToolDisabled("thehive_promote_alert");
@@ -263,7 +270,7 @@ export function registerAlertTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(promoted, null, 2),
+              text: formatJson(promoted),
             },
           ],
         };
@@ -287,6 +294,7 @@ export function registerAlertTools(
     {
       alertId: z.string().describe("The alert ID to delete"),
     },
+    DESTRUCTIVE,
     async ({ alertId }) => {
       if (!options.allowDestructiveTools) {
         return destructiveToolDisabled("thehive_delete_alert");

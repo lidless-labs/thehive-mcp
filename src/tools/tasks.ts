@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
+import { formatJson } from "./output.js";
+import { CREATE, READ_ONLY, UPDATE } from "./annotations.js";
 
 const taskStatusSchema = z.enum(["Waiting", "InProgress", "Completed", "Cancel"]);
 
@@ -29,6 +31,7 @@ export function registerTaskTools(
         .optional()
         .describe("Maximum number of results (default: 50)"),
     },
+    READ_ONLY,
     async ({ caseId, status, assignee, limit }) => {
       try {
         const tasks = await client.listTasks(caseId, {
@@ -40,7 +43,7 @@ export function registerTaskTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(tasks, null, 2),
+              text: formatJson(tasks),
             },
           ],
         };
@@ -64,6 +67,7 @@ export function registerTaskTools(
     {
       taskId: z.string().describe("The task ID"),
     },
+    READ_ONLY,
     async ({ taskId }) => {
       try {
         const task = await client.getTask(taskId);
@@ -71,7 +75,7 @@ export function registerTaskTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(task, null, 2),
+              text: formatJson(task),
             },
           ],
         };
@@ -122,6 +126,7 @@ export function registerTaskTools(
         .optional()
         .describe("Due date as Unix timestamp in milliseconds"),
     },
+    CREATE,
     async ({ caseId, title, description, status, flag, order, group, assignee, dueDate }) => {
       try {
         const created = await client.createTask(caseId, {
@@ -138,7 +143,7 @@ export function registerTaskTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(created, null, 2),
+              text: formatJson(created),
             },
           ],
         };
@@ -176,6 +181,7 @@ export function registerTaskTools(
         .optional()
         .describe("New due date as Unix timestamp in milliseconds"),
     },
+    UPDATE,
     async ({ taskId, ...data }) => {
       try {
         const updated = await client.updateTask(taskId, data);
@@ -183,7 +189,7 @@ export function registerTaskTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(updated, null, 2),
+              text: formatJson(updated),
             },
           ],
         };
