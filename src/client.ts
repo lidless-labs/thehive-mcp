@@ -14,6 +14,48 @@ import type {
   TheHiveCaseTemplate,
 } from "./types.js";
 
+/** Largest upstream response body (in characters) the client will parse. */
+const MAX_RESPONSE_CHARS = 10_000_000;
+
+/** Largest error body (in characters) read before it is summarised. */
+const MAX_ERROR_BODY_CHARS = 64_000;
+
+/**
+ * Read a response body as text, stopping once `limit` characters have arrived.
+ * Returns the text read so far and whether the body was cut off. Falls back to
+ * `text()` when the response exposes no readable stream.
+ */
+async function readBodyCapped(
+  response: Response,
+  limit: number,
+): Promise<{ text: string; truncated: boolean }> {
+  const stream = response.body as ReadableStream<Uint8Array> | null | undefined;
+  if (!stream || typeof stream.getReader !== "function") {
+    const text = await response.text();
+    return text.length > limit
+      ? { text: text.slice(0, limit), truncated: true }
+      : { text, truncated: false };
+  }
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        return { text: text + decoder.decode(), truncated: false };
+      }
+      text += decoder.decode(value, { stream: true });
+      if (text.length > limit) {
+        await reader.cancel().catch(() => undefined);
+        return { text: text.slice(0, limit), truncated: true };
+      }
+    }
+  } finally {
+    reader.releaseLock?.();
+  }
+}
+
 export class TheHiveClient {
   private readonly baseUrl: string;
   private readonly connectorBaseUrl: string;
@@ -79,7 +121,9 @@ export class TheHiveClient {
       });
 
       if (!response.ok) {
-        const body = await response.text().catch(() => "");
+        const body = await readBodyCapped(response, MAX_ERROR_BODY_CHARS)
+          .then((result) => result.text)
+          .catch(() => "");
         const message = this.getErrorMessage(response.status, body);
         throw new Error(message);
       }
@@ -90,7 +134,18 @@ export class TheHiveClient {
       }
 
       if (typeof response.text === "function") {
-        const body = await response.text();
+        const declaredLength = Number(response.headers?.get?.("content-length"));
+        if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_CHARS) {
+          throw new Error(
+            `TheHive API response too large (${declaredLength} bytes, limit ${MAX_RESPONSE_CHARS}); narrow the request`,
+          );
+        }
+        const { text: body, truncated } = await readBodyCapped(response, MAX_RESPONSE_CHARS);
+        if (truncated) {
+          throw new Error(
+            `TheHive API response too large (more than ${MAX_RESPONSE_CHARS} characters); narrow the request`,
+          );
+        }
         if (!body) {
           return {} as T;
         }
@@ -674,12 +729,14 @@ export class TheHiveClient {
       { _name: similarityQuery },
     ];
 
+    // TheHive does not support pagination on the similarity operations, so the
+    // cap is applied to the returned list instead of sent as a range.
     const clampedLimit = Math.min(Math.max(limit, 1), 500);
-    return this.query<Record<string, unknown>>(
+    const results = await this.query<Record<string, unknown>>(
       `${entityType}-${similarityQuery}`,
       queryFilters,
-      { range: `0-${clampedLimit}` },
     );
+    return results.slice(0, clampedLimit);
   }
 
   // --- Users ---

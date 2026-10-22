@@ -1,13 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
-
-const READ_ONLY = {
-  readOnlyHint: true,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false,
-};
+import { READ_ONLY } from "./annotations.js";
+import { formatJson } from "./output.js";
 
 const similarityInput = {
   entityType: z
@@ -36,7 +31,7 @@ export function registerSimilarTools(
       try {
         const similar = await client.getSimilarCases(entityType, entityId, limit);
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(similar, null, 2) }],
+          content: [{ type: "text" as const, text: formatJson(similar) }],
         };
       } catch (error) {
         return {
@@ -61,7 +56,7 @@ export function registerSimilarTools(
       try {
         const similar = await client.getSimilarAlerts(entityType, entityId, limit);
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(similar, null, 2) }],
+          content: [{ type: "text" as const, text: formatJson(similar) }],
         };
       } catch (error) {
         return {
