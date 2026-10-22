@@ -2,11 +2,24 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
 import { formatJson } from "./output.js";
-import { CREATE_OPEN_WORLD, READ_ONLY } from "./annotations.js";
+import {
+  CREATE_OPEN_WORLD,
+  DESTRUCTIVE,
+  READ_ONLY,
+} from "./annotations.js";
+import { destructiveToolDisabled, type ToolSafetyOptions } from "./safety.js";
+
+const entityTypeSchema = z
+  .string()
+  .regex(/^[A-Za-z_]+$/, "entityType must contain only letters and underscores")
+  .describe(
+    "Entity type as used by the TheHive Cortex connector (for example case, alert, case_task, case_artifact)",
+  );
 
 export function registerCortexTools(
   server: McpServer,
   client: TheHiveClient,
+  options: ToolSafetyOptions = {},
 ): void {
   server.tool(
     "thehive_list_analyzers",
@@ -319,6 +332,118 @@ export function registerCortexTools(
             {
               type: "text" as const,
               text: `Error summarizing job report: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "thehive_list_responders",
+    "List Cortex responders available for a case, alert, task, or observable",
+    {
+      entityType: entityTypeSchema,
+      entityId: z.string().min(1).describe("The ID of the entity"),
+    },
+    READ_ONLY,
+    async ({ entityType, entityId }) => {
+      try {
+        const responders = await client.listResponders(entityType, entityId);
+        return {
+          content: [{ type: "text" as const, text: formatJson(responders) }],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error listing responders: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "thehive_run_responder",
+    "Run a Cortex responder on a case, alert, task, or observable. Responders have real-world side effects. Requires THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true.",
+    {
+      responderId: z.string().min(1).describe("The Cortex responder ID to run"),
+      cortexId: z
+        .string()
+        .optional()
+        .describe("The Cortex server ID (e.g. 'cortex')"),
+      objectType: entityTypeSchema.describe(
+        "Type of the target object (for example case, alert, case_task, case_artifact)",
+      ),
+      objectId: z.string().min(1).describe("The ID of the target object"),
+      parameters: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe("Responder-specific parameters"),
+      tlp: z
+        .number()
+        .int()
+        .min(0)
+        .max(4)
+        .optional()
+        .describe("TLP 2.0 to apply to the action: 0=Clear, 1=Green, 2=Amber, 3=Amber+Strict, 4=Red"),
+    },
+    { ...DESTRUCTIVE, openWorldHint: true },
+    async ({ responderId, cortexId, objectType, objectId, parameters, tlp }) => {
+      if (!options.allowDestructiveTools) {
+        return destructiveToolDisabled("thehive_run_responder");
+      }
+      try {
+        const action = await client.runResponder({
+          responderId,
+          ...(cortexId !== undefined && { cortexId }),
+          objectType,
+          objectId,
+          ...(parameters !== undefined && { parameters }),
+          ...(tlp !== undefined && { tlp }),
+        });
+        return {
+          content: [{ type: "text" as const, text: formatJson(action) }],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error running responder: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "thehive_list_actions",
+    "List past Cortex responder actions run on a case, alert, task, or observable",
+    {
+      entityType: entityTypeSchema,
+      entityId: z.string().min(1).describe("The ID of the entity"),
+    },
+    READ_ONLY,
+    async ({ entityType, entityId }) => {
+      try {
+        const actions = await client.listActions(entityType, entityId);
+        return {
+          content: [{ type: "text" as const, text: formatJson(actions) }],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error listing actions: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
           isError: true,
