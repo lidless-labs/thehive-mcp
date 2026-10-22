@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
+import { formatJson } from "./output.js";
+import { READ_ONLY } from "./annotations.js";
 import { rawQueryDisabled, type ToolSafetyOptions } from "./safety.js";
 
 export function registerQueryTools(
@@ -40,6 +42,7 @@ Common query filters:
         .optional()
         .describe("Query name for caching/debugging"),
     },
+    READ_ONLY,
     async ({ query: queryStr, range, sort, name }) => {
       if (!options.enableRawQuery) {
         return rawQueryDisabled();
@@ -58,7 +61,7 @@ Common query filters:
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(results, null, 2),
+              text: formatJson(results),
             },
           ],
         };

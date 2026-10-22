@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
+import { formatJson } from "./output.js";
+import { CREATE, READ_ONLY } from "./annotations.js";
 
 export function registerTaskLogTools(
   server: McpServer,
@@ -19,6 +21,7 @@ export function registerTaskLogTools(
         .optional()
         .describe("Maximum number of results (default: 50)"),
     },
+    READ_ONLY,
     async ({ taskId, limit }) => {
       try {
         const logs = await client.listTaskLogs(taskId, limit);
@@ -26,7 +29,7 @@ export function registerTaskLogTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(logs, null, 2),
+              text: formatJson(logs),
             },
           ],
         };
@@ -58,6 +61,7 @@ export function registerTaskLogTools(
         .optional()
         .describe("Timeline inclusion flag (0=excluded, 1=included)"),
     },
+    CREATE,
     async ({ taskId, message, includeInTimeline }) => {
       try {
         const created = await client.createTaskLog(taskId, {
@@ -68,7 +72,7 @@ export function registerTaskLogTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(created, null, 2),
+              text: formatJson(created),
             },
           ],
         };
