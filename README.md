@@ -28,7 +28,7 @@ thehive-mcp is a Model Context Protocol server for [TheHive](https://thehive-pro
 
 thehive-mcp is an MCP server for **TheHive** incident response and case management. It exposes 51 Model Context Protocol tools that map onto the full TheHive 5 API surface, so an MCP client (Claude Desktop, Claude Code, Codex CLI, OpenClaw, Hermes, or any other) can drive a security operations center: create and triage cases, manage alerts, add and search observables, run and poll Cortex analyzers, file task logs and comments, and orchestrate SOAR-style incident response workflows in plain language. It talks to your TheHive instance over its REST API and speaks MCP over stdio, so it slots into any agent that supports the protocol with no extra service to run.
 
-The differentiator is safety. Irreversible operations (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`) and the raw Query DSL tool are gated off by default and only become callable when you opt in with an environment variable. TLS relaxation is scoped to TheHive requests only, never the whole process. The server is tested against a live **TheHive 5.4.11** instance across read, write, and destructive workflows.
+The differentiator is safety. Irreversible operations (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`), the bulk case tools (`thehive_bulk_assign_cases`, `thehive_bulk_close_cases`), and the raw Query DSL tool are gated off by default and only become callable when you opt in with an environment variable. TLS relaxation is scoped to TheHive requests only, never the whole process. The server is tested against a live **TheHive 5.4.11** instance across read, write, and destructive workflows.
 
 ## Quickstart
 
@@ -90,7 +90,7 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 
 ## Tools
 
-51 tools across cases, alerts, tasks, observables, Cortex, and more. The four destructive tools and the raw query tool are gated behind environment flags as noted.
+51 tools across cases, alerts, tasks, observables, Cortex, and more. The six destructive tools and the raw query tool are gated behind environment flags as noted.
 
 ### Cases (16 tools)
 
@@ -107,8 +107,8 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 | `thehive_add_case_tags` | Add tags without replacing existing tags |
 | `thehive_remove_case_tags` | Remove selected tags |
 | `thehive_set_case_flag` | Set or clear the case flag |
-| `thehive_bulk_assign_cases` | Assign multiple cases to a user |
-| `thehive_bulk_close_cases` | Close multiple cases with the same resolution |
+| `thehive_bulk_assign_cases` | Assign multiple cases to a user. Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
+| `thehive_bulk_close_cases` | Close multiple cases with the same resolution. Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
 | `thehive_case_timeline_summary` | Summarize case details, tasks, observables, and comments |
 | `thehive_delete_case` | Permanently delete a case (with optional force). Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
 | `thehive_merge_cases` | Merge multiple cases into one (irreversible). Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
@@ -208,7 +208,7 @@ Set environment variables:
 | `THEHIVE_API_KEY` | Yes | - | API key for authentication |
 | `THEHIVE_VERIFY_SSL` | No | `true` | Set to `false` only for trusted lab systems with self-signed TLS. When disabled, TLS verification is relaxed only for TheHive requests (via a scoped dispatcher), not for the whole process |
 | `THEHIVE_TIMEOUT` | No | `30` | Request timeout in seconds (1-300) |
-| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Set to `true` to enable destructive/irreversible MCP tools (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`) |
+| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Set to `true` to enable destructive/irreversible MCP tools (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`, `thehive_bulk_assign_cases`, `thehive_bulk_close_cases`) |
 | `THEHIVE_ENABLE_RAW_QUERY` | No | `false` | Set to `true` to enable the raw Query DSL MCP tool |
 
 ## Prompt Templates
@@ -310,7 +310,8 @@ If you run from a source checkout instead of the npm package, point `command`/`a
 - **Observable creation returns arrays.** The client handles this transparently. Bulk creation uses `data` as an array.
 - **Cortex connector endpoints** live under `/api/connector/` not `/api/v1/`.
 - **`description` is required** when creating cases and alerts.
-- **Destructive MCP tools are gated.** `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases` (irreversible), and `thehive_promote_alert` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`.
+- **Destructive MCP tools are gated.** `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases` (irreversible), `thehive_promote_alert`, `thehive_bulk_assign_cases`, and `thehive_bulk_close_cases` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`.
+- **Tool output and upstream responses are bounded.** Every tool declares MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), tool text is capped at 100,000 characters, upstream response bodies are capped at 10 MB, and bulk tools issue at most 5 concurrent requests.
 - **Raw query is gated.** `thehive_query` requires `THEHIVE_ENABLE_RAW_QUERY=true`.
 - **SSL verification is scoped.** Setting `THEHIVE_VERIFY_SSL=false` relaxes TLS certificate validation only for requests to TheHive (via a per-client undici dispatcher) and never disables it process-wide. A warning is logged to stderr when enabled.
 

@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
+import { CREATE, READ_ONLY } from "./annotations.js";
+import { formatJson } from "./output.js";
 
 const observableDataTypeSchema = z.enum([
   "ip",
@@ -15,26 +17,12 @@ const observableDataTypeSchema = z.enum([
   "other",
 ]);
 
-const READ_ONLY = {
-  readOnlyHint: true,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false,
-};
-
-const CREATE = {
-  readOnlyHint: false,
-  destructiveHint: false,
-  idempotentHint: false,
-  openWorldHint: false,
-};
-
 function jsonResult(value: unknown) {
   return {
     content: [
       {
         type: "text" as const,
-        text: JSON.stringify(value, null, 2),
+        text: formatJson(value),
       },
     ],
   };
@@ -122,9 +110,9 @@ export function registerAlertDetailTools(
         .number()
         .int()
         .min(0)
-        .max(3)
+        .max(4)
         .optional()
-        .describe("TLP: 0=Clear, 1=Green, 2=Amber, 3=Red (default: 2)"),
+        .describe("TLP 2.0: 0=Clear, 1=Green, 2=Amber, 3=Amber+Strict, 4=Red (default: 2)"),
       pap: z
         .number()
         .int()
