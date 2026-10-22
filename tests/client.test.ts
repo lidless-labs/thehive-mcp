@@ -325,6 +325,59 @@ describe("TheHiveClient", () => {
     });
   });
 
+  describe("similarity queries", () => {
+    const lastCall = () =>
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+
+    it.each([
+      ["alert", "getAlert"],
+      ["case", "getCase"],
+    ] as const)("should query similar cases for a %s", async (entityType, getter) => {
+      const similar = [{ case: { _id: "~c2" }, similarObservableCount: 2 }];
+      globalThis.fetch = mockFetch(similar);
+
+      const result = await client.getSimilarCases(entityType, "~e1", 25);
+
+      expect(result).toEqual(similar);
+      const [url, options] = lastCall();
+      expect(url).toBe(
+        `https://thehive.example.com/api/v1/query?name=${entityType}-similarCasesLight`,
+      );
+      expect(JSON.parse(options.body)).toEqual({
+        query: [{ _name: getter, idOrName: "~e1" }, { _name: "similarCasesLight" }],
+        range: "0-25",
+      });
+    });
+
+    it.each([
+      ["alert", "getAlert"],
+      ["case", "getCase"],
+    ] as const)("should query similar alerts for a %s", async (entityType, getter) => {
+      globalThis.fetch = mockFetch([]);
+
+      await client.getSimilarAlerts(entityType, "~e1");
+
+      const [url, options] = lastCall();
+      expect(url).toBe(
+        `https://thehive.example.com/api/v1/query?name=${entityType}-similarAlertsLight`,
+      );
+      expect(JSON.parse(options.body)).toEqual({
+        query: [{ _name: getter, idOrName: "~e1" }, { _name: "similarAlertsLight" }],
+        range: "0-50",
+      });
+    });
+
+    it("should clamp the similarity limit to the 1-500 range", async () => {
+      globalThis.fetch = mockFetch([]);
+      await client.getSimilarCases("case", "~c1", 9999);
+      expect(JSON.parse(lastCall()[1].body).range).toBe("0-500");
+
+      globalThis.fetch = mockFetch([]);
+      await client.getSimilarCases("case", "~c1", 0);
+      expect(JSON.parse(lastCall()[1].body).range).toBe("0-1");
+    });
+  });
+
   describe("tasks", () => {
     it("should list tasks for a case", async () => {
       const mockTasks = [
