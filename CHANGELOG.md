@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **`thehive_update_observable`** - Patch an existing observable (IOC, sighted, TLP/PAP, tags, message, similarity) and return the refreshed record
+
 ### Documentation
 - Rewrote `README.md` to the OSS adoption standard: a what/why/how lede, an MCP client config block, a website link, and "Why not the REST API / a generic bridge?" and "What thehive-mcp is not" sections. The 47-tool list is unchanged and still matches the source.
 - Added `CONTRIBUTING.md`, `SECURITY.md`, and `CODE_OF_CONDUCT.md`.

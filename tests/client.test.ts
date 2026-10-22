@@ -409,6 +409,25 @@ describe("TheHiveClient", () => {
       );
     });
 
+    it("should update an observable with PATCH then re-fetch it", async () => {
+      const refreshed = { _id: "~o1", dataType: "ip", data: "10.0.0.1", ioc: true };
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 204, json: () => Promise.resolve({}), text: () => Promise.resolve("") })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(refreshed), text: () => Promise.resolve(JSON.stringify(refreshed)) });
+      globalThis.fetch = fetchMock;
+
+      const result = await client.updateObservable("~o1", { ioc: true, addTags: ["c2"] });
+
+      expect(result).toEqual(refreshed);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const [patchUrl, patchOptions] = fetchMock.mock.calls[0];
+      expect(patchUrl).toBe("https://thehive.example.com/api/v1/observable/~o1");
+      expect(patchOptions.method).toBe("PATCH");
+      expect(JSON.parse(patchOptions.body)).toEqual({ ioc: true, addTags: ["c2"] });
+      const [getUrl] = fetchMock.mock.calls[1];
+      expect(getUrl).toBe("https://thehive.example.com/api/v1/observable/~o1");
+    });
+
     it("should search observables globally", async () => {
       globalThis.fetch = mockFetch([]);
 

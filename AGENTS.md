@@ -9,7 +9,7 @@ It runs `npm run typecheck`, `npm test`, and `npm run build` in order; a change 
 Report the actual results. If anything fails, paste the failure verbatim and do not claim success. Never weaken, skip, or delete a failing test to get green.
 
 ## Project Shape
-- TypeScript MCP server for TheHive 5 (security incident response). 47 tools, 3 prompts, 3 resources over stdio. Tested against TheHive 5.4.11.
+- TypeScript MCP server for TheHive 5 (security incident response). 48 tools, 3 prompts, 3 resources over stdio. Tested against TheHive 5.4.11.
 - Entry point: `src/index.ts` (built to `dist/index.js`, also the npm `bin`). Every tool module under `src/tools/` must be registered there via its `register*Tools` function.
 - `src/client.ts` is the single HTTP client for the TheHive API. `src/config.ts` parses all `THEHIVE_*` env vars. `src/tools/safety.ts` holds the disabled-tool responses for gated tools.
 - Configuration is env-var only. `THEHIVE_URL` and `THEHIVE_API_KEY` are required; see README for the rest.

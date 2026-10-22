@@ -195,6 +195,89 @@ export function registerObservableTools(
   );
 
   server.tool(
+    "thehive_update_observable",
+    "Update metadata of an existing observable (IOC flag, sighted, TLP/PAP, tags, message). At least one field is required.",
+    {
+      observableId: z.string().describe("The observable ID to update"),
+      message: z.string().optional().describe("New description or context"),
+      tlp: z
+        .number()
+        .int()
+        .min(0)
+        .max(4)
+        .optional()
+        .describe("TLP: 0=Clear, 1=Green, 2=Amber, 3=Red, 4=Amber+Strict"),
+      pap: z
+        .number()
+        .int()
+        .min(0)
+        .max(3)
+        .optional()
+        .describe("PAP: 0=Clear, 1=Green, 2=Amber, 3=Red"),
+      tags: z
+        .array(z.string())
+        .optional()
+        .describe("Replace the full tag set with these tags"),
+      addTags: z.array(z.string()).optional().describe("Tags to add"),
+      removeTags: z.array(z.string()).optional().describe("Tags to remove"),
+      ioc: z.boolean().optional().describe("Mark or unmark as Indicator of Compromise"),
+      sighted: z.boolean().optional().describe("Mark or unmark as sighted"),
+      sightedAt: z
+        .number()
+        .int()
+        .optional()
+        .describe("Sighting time as epoch milliseconds"),
+      ignoreSimilarity: z
+        .boolean()
+        .optional()
+        .describe("Exclude this observable from similarity checks"),
+    },
+    {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ observableId, ...fields }) => {
+      const update = Object.fromEntries(
+        Object.entries(fields).filter(([, value]) => value !== undefined),
+      );
+      if (Object.keys(update).length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "Error updating observable: provide at least one field to update",
+            },
+          ],
+          isError: true,
+        };
+      }
+      try {
+        const updated = await client.updateObservable(observableId, update);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(updated, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error updating observable: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
     "thehive_create_observable_bulk",
     "Add multiple observables of the same type to a case in one request. More efficient than creating one at a time.",
     {
