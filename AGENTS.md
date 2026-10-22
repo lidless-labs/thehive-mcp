@@ -9,7 +9,7 @@ It runs `npm run typecheck`, `npm test`, and `npm run build` in order; a change 
 Report the actual results. If anything fails, paste the failure verbatim and do not claim success. Never weaken, skip, or delete a failing test to get green.
 
 ## Project Shape
-- TypeScript MCP server for TheHive 5 (security incident response). 47 tools, 3 prompts, 3 resources over stdio. Tested against TheHive 5.4.11.
+- TypeScript MCP server for TheHive 5 (security incident response). 50 tools, 3 prompts, 3 resources over stdio. Tested against TheHive 5.4.11.
 - Entry point: `src/index.ts` (built to `dist/index.js`, also the npm `bin`). Every tool module under `src/tools/` must be registered there via its `register*Tools` function.
 - `src/client.ts` is the single HTTP client for the TheHive API. `src/config.ts` parses all `THEHIVE_*` env vars. `src/tools/safety.ts` holds the disabled-tool responses for gated tools.
 - Configuration is env-var only. `THEHIVE_URL` and `THEHIVE_API_KEY` are required; see README for the rest.
@@ -17,7 +17,7 @@ Report the actual results. If anything fails, paste the failure verbatim and do 
 ## Live-Instance Prohibitions
 TheHive holds real incident-response data. Treat every configured instance as production.
 - During development or review: never run write or destructive tools against a live instance unless the user explicitly asks for that operation in this session. Read-only calls only.
-- Adding a tool that deletes, merges, promotes, or mutates broadly: gate it behind `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` via `src/tools/safety.ts`. Existing gated tools: `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`.
+- Adding a tool that deletes, merges, promotes, or mutates broadly: gate it behind `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` via `src/tools/safety.ts`. Existing gated tools: `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`, `thehive_run_responder`.
 - Adding a tool that accepts raw Query DSL: gate it behind `THEHIVE_ENABLE_RAW_QUERY` (as `thehive_query` is). Never loosen either gate's default-off behavior.
 - Touching TLS handling: `THEHIVE_VERIFY_SSL=false` must only relax TLS for TheHive requests via the per-instance undici dispatcher in `src/client.ts`. Never disable TLS process-wide and never remove the scoped dispatcher.
 

@@ -52,7 +52,9 @@ async function main(): Promise<void> {
   registerTaskLogTools(server, client);
   registerCommentTools(server, client);
   registerUserTools(server, client);
-  registerCortexTools(server, client);
+  registerCortexTools(server, client, {
+    allowDestructiveTools: config.allowDestructiveTools,
+  });
   registerStatusTools(server, client);
   registerQueryTools(server, client, {
     enableRawQuery: config.enableRawQuery,

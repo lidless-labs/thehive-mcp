@@ -26,9 +26,9 @@ thehive-mcp is a Model Context Protocol server for [TheHive](https://thehive-pro
 
 ## What it does
 
-thehive-mcp is an MCP server for **TheHive** incident response and case management. It exposes 47 Model Context Protocol tools that map onto the full TheHive 5 API surface, so an MCP client (Claude Desktop, Claude Code, Codex CLI, OpenClaw, Hermes, or any other) can drive a security operations center: create and triage cases, manage alerts, add and search observables, run and poll Cortex analyzers, file task logs and comments, and orchestrate SOAR-style incident response workflows in plain language. It talks to your TheHive instance over its REST API and speaks MCP over stdio, so it slots into any agent that supports the protocol with no extra service to run.
+thehive-mcp is an MCP server for **TheHive** incident response and case management. It exposes 50 Model Context Protocol tools that map onto the full TheHive 5 API surface, so an MCP client (Claude Desktop, Claude Code, Codex CLI, OpenClaw, Hermes, or any other) can drive a security operations center: create and triage cases, manage alerts, add and search observables, run and poll Cortex analyzers, file task logs and comments, and orchestrate SOAR-style incident response workflows in plain language. It talks to your TheHive instance over its REST API and speaks MCP over stdio, so it slots into any agent that supports the protocol with no extra service to run.
 
-The differentiator is safety. Irreversible operations (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`) and the raw Query DSL tool are gated off by default and only become callable when you opt in with an environment variable. TLS relaxation is scoped to TheHive requests only, never the whole process. The server is tested against a live **TheHive 5.4.11** instance across read, write, and destructive workflows.
+The differentiator is safety. Irreversible operations (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`, `thehive_run_responder`) and the raw Query DSL tool are gated off by default and only become callable when you opt in with an environment variable. TLS relaxation is scoped to TheHive requests only, never the whole process. The server is tested against a live **TheHive 5.4.11** instance across read, write, and destructive workflows.
 
 ## Quickstart
 
@@ -90,7 +90,7 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 
 ## Tools
 
-47 tools across cases, alerts, tasks, observables, Cortex, and more. The four destructive tools and the raw query tool are gated behind environment flags as noted.
+50 tools across cases, alerts, tasks, observables, Cortex, and more. The five destructive tools and the raw query tool are gated behind environment flags as noted.
 
 ### Cases (16 tools)
 
@@ -164,7 +164,7 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 | `thehive_list_users` | List users in the organization |
 | `thehive_get_current_user` | Get the authenticated user's profile |
 
-### Cortex (7 tools)
+### Cortex (10 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -175,6 +175,9 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 | `thehive_get_job` | Get analyzer job status and results |
 | `thehive_wait_for_job` | Poll a job until it reaches a terminal status |
 | `thehive_summarize_job_report` | Return a compact analyzer report summary |
+| `thehive_list_responders` | List Cortex responders available for a case, alert, task, or observable |
+| `thehive_run_responder` | Run a Cortex responder on an entity. Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
+| `thehive_list_actions` | List past responder actions on an entity |
 
 ### Query (1 tool)
 
@@ -204,7 +207,7 @@ Set environment variables:
 | `THEHIVE_API_KEY` | Yes | - | API key for authentication |
 | `THEHIVE_VERIFY_SSL` | No | `true` | Set to `false` only for trusted lab systems with self-signed TLS. When disabled, TLS verification is relaxed only for TheHive requests (via a scoped dispatcher), not for the whole process |
 | `THEHIVE_TIMEOUT` | No | `30` | Request timeout in seconds (1-300) |
-| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Set to `true` to enable destructive/irreversible MCP tools (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`) |
+| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Set to `true` to enable destructive/irreversible MCP tools (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`, `thehive_run_responder`) |
 | `THEHIVE_ENABLE_RAW_QUERY` | No | `false` | Set to `true` to enable the raw Query DSL MCP tool |
 
 ## Prompt Templates
@@ -306,13 +309,13 @@ If you run from a source checkout instead of the npm package, point `command`/`a
 - **Observable creation returns arrays.** The client handles this transparently. Bulk creation uses `data` as an array.
 - **Cortex connector endpoints** live under `/api/connector/` not `/api/v1/`.
 - **`description` is required** when creating cases and alerts.
-- **Destructive MCP tools are gated.** `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases` (irreversible), and `thehive_promote_alert` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`.
+- **Destructive MCP tools are gated.** `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases` (irreversible), `thehive_promote_alert`, and `thehive_run_responder` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`.
 - **Raw query is gated.** `thehive_query` requires `THEHIVE_ENABLE_RAW_QUERY=true`.
 - **SSL verification is scoped.** Setting `THEHIVE_VERIFY_SSL=false` relaxes TLS certificate validation only for requests to TheHive (via a per-client undici dispatcher) and never disables it process-wide. A warning is logged to stderr when enabled.
 
 ## Why not the TheHive REST API directly?
 
-You can, and for a script you should. The REST API is the right tool when you already know exactly which endpoint you want. thehive-mcp exists for the case where an AI agent is doing the deciding: it turns the API into 47 named, typed, described tools an MCP client can pick from in natural language, handles the TheHive 5 quirks (204 PATCH responses, array-shaped observable creation, connector endpoints under `/api/connector/`), and puts safety rails in front of the irreversible verbs so a model cannot delete or merge case data unless you explicitly opted in. A raw HTTP client gives you none of that.
+You can, and for a script you should. The REST API is the right tool when you already know exactly which endpoint you want. thehive-mcp exists for the case where an AI agent is doing the deciding: it turns the API into 50 named, typed, described tools an MCP client can pick from in natural language, handles the TheHive 5 quirks (204 PATCH responses, array-shaped observable creation, connector endpoints under `/api/connector/`), and puts safety rails in front of the irreversible verbs so a model cannot delete or merge case data unless you explicitly opted in. A raw HTTP client gives you none of that.
 
 ## Why not a generic OpenAPI-to-MCP bridge?
 

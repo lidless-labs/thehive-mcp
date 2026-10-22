@@ -568,6 +568,56 @@ describe("TheHiveClient", () => {
       expect(url).toBe("https://thehive.example.com/api/connector/cortex/job/~job1");
     });
 
+    it("should list responders for an entity", async () => {
+      const responders = [{ id: "~r1", name: "Mailer_1_0" }];
+      globalThis.fetch = mockFetch(responders);
+
+      const result = await client.listResponders("case", "~c1");
+
+      expect(result).toEqual(responders);
+      const [url, options] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(url).toBe("https://thehive.example.com/api/connector/cortex/responder/case/~c1");
+      expect(options.method).toBeUndefined();
+    });
+
+    it("should POST the action body when running a responder", async () => {
+      const action = { _id: "~act1", status: "Waiting" };
+      globalThis.fetch = mockFetch(action);
+
+      const result = await client.runResponder({
+        responderId: "~r1",
+        cortexId: "cortex",
+        objectType: "case",
+        objectId: "~c1",
+        parameters: { message: "notify" },
+        tlp: 2,
+      });
+
+      expect(result).toEqual(action);
+      const [url, options] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(url).toBe("https://thehive.example.com/api/connector/cortex/action");
+      expect(options.method).toBe("POST");
+      expect(JSON.parse(options.body)).toEqual({
+        responderId: "~r1",
+        cortexId: "cortex",
+        objectType: "case",
+        objectId: "~c1",
+        parameters: { message: "notify" },
+        tlp: 2,
+      });
+    });
+
+    it("should list past actions for an entity", async () => {
+      const actions = [{ _id: "~act1", responderName: "Mailer_1_0" }];
+      globalThis.fetch = mockFetch(actions);
+
+      const result = await client.listActions("case_artifact", "~o1");
+
+      expect(result).toEqual(actions);
+      const [url] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(url).toBe("https://thehive.example.com/api/connector/cortex/action/case_artifact/~o1");
+    });
+
     it("should fail when a Cortex job does not complete in time", async () => {
       globalThis.fetch = mockFetch({ _id: "~job1", status: "InProgress" });
 

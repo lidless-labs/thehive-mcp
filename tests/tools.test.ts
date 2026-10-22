@@ -144,14 +144,17 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_get_current_user");
   });
 
-  it("should register 7 cortex tools", () => {
+  it("should register 10 cortex tools", () => {
     registerCortexTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(7);
+    expect(toolSpy).toHaveBeenCalledTimes(10);
 
     const toolNames = toolSpy.mock.calls.map(
       (call: unknown[]) => call[0] as string,
     );
+    expect(toolNames).toContain("thehive_list_responders");
+    expect(toolNames).toContain("thehive_run_responder");
+    expect(toolNames).toContain("thehive_list_actions");
     expect(toolNames).toContain("thehive_list_analyzers");
     expect(toolNames).toContain("thehive_get_observable_enrichment_options");
     expect(toolNames).toContain("thehive_run_analyzer");
@@ -194,7 +197,7 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_list_case_templates");
   });
 
-  it("should register all 47 tools total", () => {
+  it("should register all 50 tools total", () => {
     registerCaseTools(server, client);
     registerAlertTools(server, client);
     registerTaskTools(server, client);
@@ -207,7 +210,7 @@ describe("tool registration", () => {
     registerQueryTools(server, client);
     registerTemplateTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(47);
+    expect(toolSpy).toHaveBeenCalledTimes(50);
   });
 
   it("should disable destructive case tools by default", async () => {
@@ -319,5 +322,120 @@ describe("tool registration", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("THEHIVE_ENABLE_RAW_QUERY=true");
+  });
+
+  describe("cortex responder tools", () => {
+    type ToolResult = { isError?: boolean; content: Array<{ text: string }> };
+    const handlerOf = (name: string) => {
+      const call = toolSpy.mock.calls.find((c: unknown[]) => c[0] === name);
+      expect(call, name).toBeDefined();
+      return call?.at(-1) as (args: Record<string, unknown>) => Promise<ToolResult>;
+    };
+    const runArgs = {
+      responderId: "~r1",
+      objectType: "case",
+      objectId: "~c1",
+    };
+
+    it("gates thehive_run_responder and sends no request when disabled", async () => {
+      const fetchSpy = vi.fn();
+      vi.stubGlobal("fetch", fetchSpy);
+      const runSpy = vi.spyOn(client, "runResponder");
+      registerCortexTools(server, client);
+
+      const result = await handlerOf("thehive_run_responder")(runArgs);
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("thehive_run_responder is disabled");
+      expect(result.content[0]?.text).toContain("THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true");
+      expect(runSpy).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      vi.unstubAllGlobals();
+    });
+
+    it("runs a responder when allowDestructiveTools is true", async () => {
+      const runSpy = vi
+        .spyOn(client, "runResponder")
+        .mockResolvedValue({ _id: "~act1" });
+      registerCortexTools(server, client, { allowDestructiveTools: true });
+
+      const result = await handlerOf("thehive_run_responder")({
+        ...runArgs,
+        cortexId: "cortex",
+        parameters: { message: "notify" },
+        tlp: 2,
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(runSpy).toHaveBeenCalledWith({
+        ...runArgs,
+        cortexId: "cortex",
+        parameters: { message: "notify" },
+        tlp: 2,
+      });
+    });
+
+    it("reports upstream errors from thehive_run_responder", async () => {
+      vi.spyOn(client, "runResponder").mockRejectedValue(
+        new Error("TheHive API access denied - insufficient permissions"),
+      );
+      registerCortexTools(server, client, { allowDestructiveTools: true });
+
+      const result = await handlerOf("thehive_run_responder")(runArgs);
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("Error running responder");
+    });
+
+    it("lists responders and actions without the destructive flag", async () => {
+      const respondersSpy = vi
+        .spyOn(client, "listResponders")
+        .mockResolvedValue([{ id: "~r1" }]);
+      const actionsSpy = vi
+        .spyOn(client, "listActions")
+        .mockResolvedValue([{ _id: "~act1" }]);
+      registerCortexTools(server, client);
+
+      const responders = await handlerOf("thehive_list_responders")({
+        entityType: "case",
+        entityId: "~c1",
+      });
+      const actions = await handlerOf("thehive_list_actions")({
+        entityType: "alert",
+        entityId: "~a1",
+      });
+
+      expect(responders.isError).toBeUndefined();
+      expect(respondersSpy).toHaveBeenCalledWith("case", "~c1");
+      expect(actions.isError).toBeUndefined();
+      expect(actionsSpy).toHaveBeenCalledWith("alert", "~a1");
+    });
+
+    it("reports upstream errors from the read tools", async () => {
+      vi.spyOn(client, "listResponders").mockRejectedValue(new Error("TheHive API resource not found"));
+      vi.spyOn(client, "listActions").mockRejectedValue(new Error("TheHive API resource not found"));
+      registerCortexTools(server, client);
+
+      const responders = await handlerOf("thehive_list_responders")({ entityType: "case", entityId: "~c1" });
+      const actions = await handlerOf("thehive_list_actions")({ entityType: "case", entityId: "~c1" });
+
+      expect(responders.isError).toBe(true);
+      expect(actions.isError).toBe(true);
+    });
+
+    it("annotates the run tool as destructive and the read tools as read-only", () => {
+      registerCortexTools(server, client);
+      const annotationsOf = (name: string) =>
+        toolSpy.mock.calls.find((c: unknown[]) => c[0] === name)?.[3] as Record<string, boolean>;
+
+      expect(annotationsOf("thehive_run_responder")).toMatchObject({
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      });
+      expect(annotationsOf("thehive_list_responders").readOnlyHint).toBe(true);
+      expect(annotationsOf("thehive_list_actions").readOnlyHint).toBe(true);
+    });
   });
 });

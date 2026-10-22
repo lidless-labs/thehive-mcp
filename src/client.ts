@@ -742,6 +742,41 @@ export class TheHiveClient {
     );
   }
 
+  async listResponders(
+    entityType: string,
+    entityId: string,
+  ): Promise<Record<string, unknown>[]> {
+    return this.connectorRequest<Record<string, unknown>[]>(
+      `/connector/cortex/responder/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
+    );
+  }
+
+  async runResponder(action: {
+    responderId: string;
+    cortexId?: string;
+    objectType: string;
+    objectId: string;
+    parameters?: Record<string, unknown>;
+    tlp?: number;
+  }): Promise<Record<string, unknown>> {
+    return this.connectorRequest<Record<string, unknown>>(
+      `/connector/cortex/action`,
+      {
+        method: "POST",
+        body: JSON.stringify(action),
+      },
+    );
+  }
+
+  async listActions(
+    entityType: string,
+    entityId: string,
+  ): Promise<Record<string, unknown>[]> {
+    return this.connectorRequest<Record<string, unknown>[]>(
+      `/connector/cortex/action/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
+    );
+  }
+
   async getJob(jobId: string): Promise<TheHiveJob> {
     return this.connectorRequest<TheHiveJob>(
       `/connector/cortex/job/${encodeURIComponent(jobId)}`,
