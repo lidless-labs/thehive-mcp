@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
+import { formatJson } from "./output.js";
+import { CREATE_OPEN_WORLD, READ_ONLY } from "./annotations.js";
 
 export function registerCortexTools(
   server: McpServer,
@@ -15,6 +17,7 @@ export function registerCortexTools(
         .optional()
         .describe("Filter analyzers by observable data type (e.g. ip, domain, hash)"),
     },
+    READ_ONLY,
     async ({ dataType }) => {
       try {
         const analyzers = await client.listAnalyzers(dataType);
@@ -22,7 +25,7 @@ export function registerCortexTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(analyzers, null, 2),
+              text: formatJson(analyzers),
             },
           ],
         };
@@ -48,6 +51,7 @@ export function registerCortexTools(
         .string()
         .describe("The observable ID to find enrichment analyzers for"),
     },
+    READ_ONLY,
     async ({ observableId }) => {
       try {
         const observable = await client.getObservable(observableId);
@@ -56,7 +60,7 @@ export function registerCortexTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(
+              text: formatJson(
                 {
                   observable: {
                     id: observable._id,
@@ -74,9 +78,7 @@ export function registerCortexTools(
                     dataTypeList: analyzer.dataTypeList ?? [],
                   })),
                 },
-                null,
-                2,
-              ),
+                              ),
             },
           ],
         };
@@ -108,6 +110,7 @@ export function registerCortexTools(
         .string()
         .describe("The observable ID to analyze"),
     },
+    CREATE_OPEN_WORLD,
     async ({ analyzerId, cortexId, observableId }) => {
       try {
         const job = await client.runAnalyzer(analyzerId, cortexId, observableId);
@@ -115,7 +118,7 @@ export function registerCortexTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(job, null, 2),
+              text: formatJson(job),
             },
           ],
         };
@@ -161,6 +164,7 @@ export function registerCortexTools(
         .optional()
         .describe("Polling interval in milliseconds (default: 2000)"),
     },
+    CREATE_OPEN_WORLD,
     async ({ analyzerId, cortexId, observableId, maxAttempts, intervalMs }) => {
       try {
         const started = await client.runAnalyzer(analyzerId, cortexId, observableId);
@@ -173,15 +177,13 @@ export function registerCortexTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(
+              text: formatJson(
                 {
                   started,
                   completed,
                   summary: summarizeJob(completed),
                 },
-                null,
-                2,
-              ),
+                              ),
             },
           ],
         };
@@ -207,6 +209,7 @@ export function registerCortexTools(
         .string()
         .describe("The Cortex job ID"),
     },
+    READ_ONLY,
     async ({ jobId }) => {
       try {
         const job = await client.getJob(jobId);
@@ -214,7 +217,7 @@ export function registerCortexTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(job, null, 2),
+              text: formatJson(job),
             },
           ],
         };
@@ -254,6 +257,7 @@ export function registerCortexTools(
         .optional()
         .describe("Polling interval in milliseconds (default: 2000)"),
     },
+    READ_ONLY,
     async ({ jobId, maxAttempts, intervalMs }) => {
       try {
         const job = await client.waitForJob(jobId, { maxAttempts, intervalMs });
@@ -261,7 +265,7 @@ export function registerCortexTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(job, null, 2),
+              text: formatJson(job),
             },
           ],
         };
@@ -291,6 +295,7 @@ export function registerCortexTools(
         .optional()
         .describe("Include the raw report object in the response (default: false)"),
     },
+    READ_ONLY,
     async ({ jobId, includeRawReport }) => {
       try {
         const job = await client.getJob(jobId);
@@ -299,14 +304,12 @@ export function registerCortexTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(
+              text: formatJson(
                 {
                   ...summary,
                   ...(includeRawReport && { rawReport: job.report }),
                 },
-                null,
-                2,
-              ),
+                              ),
             },
           ],
         };

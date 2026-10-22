@@ -14,6 +14,9 @@ import type {
   TheHiveCaseTemplate,
 } from "./types.js";
 
+/** Largest upstream response body (in characters) the client will parse. */
+const MAX_RESPONSE_CHARS = 10_000_000;
+
 export class TheHiveClient {
   private readonly baseUrl: string;
   private readonly connectorBaseUrl: string;
@@ -90,7 +93,18 @@ export class TheHiveClient {
       }
 
       if (typeof response.text === "function") {
+        const declaredLength = Number(response.headers?.get?.("content-length"));
+        if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_CHARS) {
+          throw new Error(
+            `TheHive API response too large (${declaredLength} bytes, limit ${MAX_RESPONSE_CHARS}); narrow the request`,
+          );
+        }
         const body = await response.text();
+        if (body.length > MAX_RESPONSE_CHARS) {
+          throw new Error(
+            `TheHive API response too large (${body.length} characters, limit ${MAX_RESPONSE_CHARS}); narrow the request`,
+          );
+        }
         if (!body) {
           return {} as T;
         }

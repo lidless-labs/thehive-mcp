@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+- `thehive_bulk_assign_cases` and `thehive_bulk_close_cases` now require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`, matching the other tools that change many records at once.
+- Bulk case tools issue at most 5 concurrent upstream requests.
+- Tool text output is capped at 100,000 characters and upstream response bodies at 10 MB, with a clear message when a cap applies.
+
+### Added
+- All 47 tools declare MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
+
 ### Documentation
 - Rewrote `README.md` to the OSS adoption standard: a what/why/how lede, an MCP client config block, a website link, and "Why not the REST API / a generic bridge?" and "What thehive-mcp is not" sections. The 47-tool list is unchanged and still matches the source.
 - Added `CONTRIBUTING.md`, `SECURITY.md`, and `CODE_OF_CONDUCT.md`.

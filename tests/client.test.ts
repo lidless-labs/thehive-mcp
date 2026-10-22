@@ -632,6 +632,30 @@ describe("TheHiveClient", () => {
       );
     });
 
+    it("should reject oversized response bodies", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        text: () => Promise.resolve(" ".repeat(10_000_001)),
+      });
+
+      await expect(client.getCase("~1")).rejects.toThrow("response too large");
+    });
+
+    it("should reject responses that declare an oversized content-length", async () => {
+      const textSpy = vi.fn().mockResolvedValue("{}");
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-length": "50000000" }),
+        text: textSpy,
+      });
+
+      await expect(client.getCase("~1")).rejects.toThrow("response too large");
+      expect(textSpy).not.toHaveBeenCalled();
+    });
+
     it("should handle timeout", async () => {
       const slowClient = new TheHiveClient({ ...mockConfig, timeout: 1 });
       globalThis.fetch = mockSlowFetch();

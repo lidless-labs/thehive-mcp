@@ -1,5 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TheHiveClient } from "../client.js";
+import { formatJson } from "./output.js";
+import { READ_ONLY } from "./annotations.js";
 
 export function registerStatusTools(
   server: McpServer,
@@ -9,6 +11,7 @@ export function registerStatusTools(
     "thehive_status",
     "Get TheHive server health status, version info, and capabilities. No authentication required.",
     {},
+    READ_ONLY,
     async () => {
       try {
         const status = await client.getStatus();
@@ -16,7 +19,7 @@ export function registerStatusTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(status, null, 2),
+              text: formatJson(status),
             },
           ],
         };
