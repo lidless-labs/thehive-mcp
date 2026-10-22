@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
+import { formatJson } from "./output.js";
+import { READ_ONLY } from "./annotations.js";
 
 export function registerTemplateTools(
   server: McpServer,
@@ -18,6 +20,7 @@ export function registerTemplateTools(
         .optional()
         .describe("Maximum number of results (default: 100)"),
     },
+    READ_ONLY,
     async ({ limit }) => {
       try {
         const templates = await client.listCaseTemplates(limit);
@@ -25,7 +28,7 @@ export function registerTemplateTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(templates, null, 2),
+              text: formatJson(templates),
             },
           ],
         };

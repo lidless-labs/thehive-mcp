@@ -371,7 +371,7 @@ async function main(): Promise<void> {
   await test("createObservableBulk (3 IPs)", async () => {
     const obs = await client.createObservableBulk(testCaseId, {
       dataType: "ip",
-      data: ["172.16.0.1", "172.16.0.2", "172.16.0.3"],
+      data: ["192.0.2.1", "192.0.2.2", "192.0.2.3"],
       message: "Bulk test IPs from MCP",
       tags: ["mcp-test", "bulk"],
       ioc: true,

@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
+import { formatJson } from "./output.js";
+import { CREATE, READ_ONLY, UPDATE } from "./annotations.js";
 
 const observableDataTypeSchema = z.enum([
   "ip",
@@ -42,6 +44,7 @@ export function registerObservableTools(
         .optional()
         .describe("Maximum number of results (default: 50)"),
     },
+    READ_ONLY,
     async ({ caseId, dataType, ioc, limit }) => {
       try {
         const observables = await client.listObservables(caseId, {
@@ -53,7 +56,7 @@ export function registerObservableTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(observables, null, 2),
+              text: formatJson(observables),
             },
           ],
         };
@@ -77,6 +80,7 @@ export function registerObservableTools(
     {
       observableId: z.string().describe("The observable ID"),
     },
+    READ_ONLY,
     async ({ observableId }) => {
       try {
         const observable = await client.getObservable(observableId);
@@ -84,7 +88,7 @@ export function registerObservableTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(observable, null, 2),
+              text: formatJson(observable),
             },
           ],
         };
@@ -148,6 +152,7 @@ export function registerObservableTools(
         .optional()
         .describe("Ignore this observable in similarity calculations"),
     },
+    CREATE,
     async ({
       caseId,
       dataType,
@@ -176,7 +181,7 @@ export function registerObservableTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(created, null, 2),
+              text: formatJson(created),
             },
           ],
         };
@@ -206,7 +211,7 @@ export function registerObservableTools(
         .min(0)
         .max(4)
         .optional()
-        .describe("TLP: 0=Clear, 1=Green, 2=Amber, 3=Red, 4=Amber+Strict"),
+        .describe("TLP 2.0: 0=Clear, 1=Green, 2=Amber, 3=Amber+Strict, 4=Red"),
       pap: z
         .number()
         .int()
@@ -232,12 +237,7 @@ export function registerObservableTools(
         .optional()
         .describe("Exclude this observable from similarity checks"),
     },
-    {
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
+    UPDATE,
     async ({ observableId, ...fields }) => {
       const update = Object.fromEntries(
         Object.entries(fields).filter(([, value]) => value !== undefined),
@@ -259,7 +259,7 @@ export function registerObservableTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(updated, null, 2),
+              text: formatJson(updated),
             },
           ],
         };
@@ -321,6 +321,7 @@ export function registerObservableTools(
         .optional()
         .describe("Mark all as sighted (default: false)"),
     },
+    CREATE,
     async ({ caseId, dataType, data, message, tags, tlp, pap, ioc, sighted }) => {
       try {
         const created = await client.createObservableBulk(caseId, {
@@ -337,7 +338,7 @@ export function registerObservableTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(created, null, 2),
+              text: formatJson(created),
             },
           ],
         };
@@ -383,6 +384,7 @@ export function registerObservableTools(
         .optional()
         .describe("Maximum number of results (default: 50)"),
     },
+    READ_ONLY,
     async ({ dataType, data, tags, ioc, limit }) => {
       try {
         const observables = await client.searchObservables({
@@ -396,7 +398,7 @@ export function registerObservableTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(observables, null, 2),
+              text: formatJson(observables),
             },
           ],
         };

@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
+import { ADDITIVE_IDEMPOTENT, CREATE, DESTRUCTIVE, READ_ONLY, UPDATE } from "./annotations.js";
+import { formatJson, settleWithConcurrency } from "./output.js";
 import { destructiveToolDisabled, type ToolSafetyOptions } from "./safety.js";
 
 const caseStatusSchema = z.enum([
@@ -58,6 +60,7 @@ export function registerCaseTools(
         .optional()
         .describe("Maximum number of results (default: 50, max: 500)"),
     },
+    READ_ONLY,
     async ({ status, severity, tags, owner, limit }) => {
       try {
         const cases = await client.listCases({
@@ -71,7 +74,7 @@ export function registerCaseTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(cases, null, 2),
+              text: formatJson(cases),
             },
           ],
         };
@@ -95,6 +98,7 @@ export function registerCaseTools(
     {
       caseId: z.string().describe("The case ID (e.g. ~123456)"),
     },
+    READ_ONLY,
     async ({ caseId }) => {
       try {
         const theCase = await client.getCase(caseId);
@@ -102,7 +106,7 @@ export function registerCaseTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(theCase, null, 2),
+              text: formatJson(theCase),
             },
           ],
         };
@@ -170,6 +174,7 @@ export function registerCaseTools(
         .optional()
         .describe("Case custom fields keyed by TheHive custom field name"),
     },
+    CREATE,
     async ({ title, description, severity, tlp, pap, tags, flag, owner, template, customFields }) => {
       try {
         const created = await client.createCase({
@@ -188,7 +193,7 @@ export function registerCaseTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(created, null, 2),
+              text: formatJson(created),
             },
           ],
         };
@@ -254,6 +259,7 @@ export function registerCaseTools(
         .optional()
         .describe("Custom fields to update, keyed by TheHive custom field name"),
     },
+    UPDATE,
     async ({ caseId, ...data }) => {
       try {
         const updated = await client.updateCase(caseId, data);
@@ -261,7 +267,7 @@ export function registerCaseTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(updated, null, 2),
+              text: formatJson(updated),
             },
           ],
         };
@@ -292,6 +298,7 @@ export function registerCaseTools(
         .optional()
         .describe("Maximum number of results (default: 50)"),
     },
+    READ_ONLY,
     async ({ query, limit }) => {
       try {
         const cases = await client.searchCases(query, limit);
@@ -299,7 +306,7 @@ export function registerCaseTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(cases, null, 2),
+              text: formatJson(cases),
             },
           ],
         };
@@ -333,6 +340,7 @@ export function registerCaseTools(
         .string()
         .describe("Case summary/conclusion explaining the resolution"),
     },
+    UPDATE,
     async ({ caseId, status, impactStatus, summary }) => {
       try {
         const updated = await client.updateCase(caseId, {
@@ -344,7 +352,7 @@ export function registerCaseTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(updated, null, 2),
+              text: formatJson(updated),
             },
           ],
         };
@@ -369,6 +377,7 @@ export function registerCaseTools(
       caseId: z.string().describe("The case ID to assign"),
       owner: z.string().min(1).describe("Username or login to assign as case owner"),
     },
+    UPDATE,
     async ({ caseId, owner }) => {
       try {
         const updated = await client.updateCase(caseId, { owner });
@@ -376,7 +385,7 @@ export function registerCaseTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(updated, null, 2),
+              text: formatJson(updated),
             },
           ],
         };
@@ -401,6 +410,7 @@ export function registerCaseTools(
       caseId: z.string().describe("The case ID to update"),
       customFields: customFieldsSchema.describe("Custom fields keyed by TheHive custom field name"),
     },
+    UPDATE,
     async ({ caseId, customFields }) => {
       try {
         const updated = await client.updateCase(caseId, { customFields });
@@ -408,7 +418,7 @@ export function registerCaseTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(updated, null, 2),
+              text: formatJson(updated),
             },
           ],
         };
@@ -433,6 +443,7 @@ export function registerCaseTools(
       caseId: z.string().describe("The case ID to update"),
       tags: z.array(z.string().min(1)).min(1).describe("Tags to add"),
     },
+    ADDITIVE_IDEMPOTENT,
     async ({ caseId, tags }) => {
       try {
         const theCase = await client.getCase(caseId);
@@ -442,7 +453,7 @@ export function registerCaseTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(updated, null, 2),
+              text: formatJson(updated),
             },
           ],
         };
@@ -467,6 +478,7 @@ export function registerCaseTools(
       caseId: z.string().describe("The case ID to update"),
       tags: z.array(z.string().min(1)).min(1).describe("Tags to remove"),
     },
+    UPDATE,
     async ({ caseId, tags }) => {
       try {
         const theCase = await client.getCase(caseId);
@@ -477,7 +489,7 @@ export function registerCaseTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(updated, null, 2),
+              text: formatJson(updated),
             },
           ],
         };
@@ -502,6 +514,7 @@ export function registerCaseTools(
       caseId: z.string().describe("The case ID to update"),
       flag: z.boolean().describe("Whether the case should be flagged"),
     },
+    UPDATE,
     async ({ caseId, flag }) => {
       try {
         const updated = await client.updateCase(caseId, { flag });
@@ -509,7 +522,7 @@ export function registerCaseTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(updated, null, 2),
+              text: formatJson(updated),
             },
           ],
         };
@@ -529,21 +542,25 @@ export function registerCaseTools(
 
   server.tool(
     "thehive_bulk_assign_cases",
-    "Assign multiple cases to a TheHive user",
+    "Assign multiple cases to a TheHive user. Requires THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true.",
     {
       caseIds: z.array(z.string()).min(1).max(50).describe("Case IDs to assign"),
       owner: z.string().min(1).describe("Username or login to assign as case owner"),
     },
+    UPDATE,
     async ({ caseIds, owner }) => {
-      const results = await Promise.allSettled(
-        caseIds.map(async (caseId) => client.updateCase(caseId, { owner })),
+      if (!options.allowDestructiveTools) {
+        return destructiveToolDisabled("thehive_bulk_assign_cases");
+      }
+      const results = await settleWithConcurrency(caseIds, async (caseId) =>
+        client.updateCase(caseId, { owner }),
       );
       const summary = summarizeSettledResults(caseIds, results);
       return {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(summary, null, 2),
+            text: formatJson(summary),
           },
         ],
         isError: summary.failed > 0,
@@ -553,7 +570,7 @@ export function registerCaseTools(
 
   server.tool(
     "thehive_bulk_close_cases",
-    "Close multiple cases with the same resolution status and summary",
+    "Close multiple cases with the same resolution status and summary. Requires THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true.",
     {
       caseIds: z.array(z.string()).min(1).max(50).describe("Case IDs to close"),
       status: z
@@ -565,22 +582,24 @@ export function registerCaseTools(
         .describe("Impact status"),
       summary: z.string().min(1).describe("Case summary/conclusion explaining the resolution"),
     },
+    UPDATE,
     async ({ caseIds, status, impactStatus, summary }) => {
-      const results = await Promise.allSettled(
-        caseIds.map(async (caseId) =>
-          client.updateCase(caseId, {
-            status,
-            ...(impactStatus && { impactStatus }),
-            summary,
-          }),
-        ),
+      if (!options.allowDestructiveTools) {
+        return destructiveToolDisabled("thehive_bulk_close_cases");
+      }
+      const results = await settleWithConcurrency(caseIds, async (caseId) =>
+        client.updateCase(caseId, {
+          status,
+          ...(impactStatus && { impactStatus }),
+          summary,
+        }),
       );
       const resultSummary = summarizeSettledResults(caseIds, results);
       return {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(resultSummary, null, 2),
+            text: formatJson(resultSummary),
           },
         ],
         isError: resultSummary.failed > 0,
@@ -595,6 +614,7 @@ export function registerCaseTools(
       caseId: z.string().describe("The case ID to summarize"),
       limit: z.number().int().min(1).max(100).optional().describe("Maximum related items per category (default: 25)"),
     },
+    READ_ONLY,
     async ({ caseId, limit }) => {
       try {
         const clampedLimit = limit ?? 25;
@@ -646,7 +666,7 @@ export function registerCaseTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(summary, null, 2),
+              text: formatJson(summary),
             },
           ],
         };
@@ -674,6 +694,7 @@ export function registerCaseTools(
         .optional()
         .describe("Force delete even if case has children (default: false)"),
     },
+    DESTRUCTIVE,
     async ({ caseId, force }) => {
       if (!options.allowDestructiveTools) {
         return destructiveToolDisabled("thehive_delete_case");
@@ -711,6 +732,7 @@ export function registerCaseTools(
         .min(2)
         .describe("Array of case IDs to merge (minimum 2)"),
     },
+    DESTRUCTIVE,
     async ({ caseIds }) => {
       if (!options.allowDestructiveTools) {
         return destructiveToolDisabled("thehive_merge_cases");
@@ -721,7 +743,7 @@ export function registerCaseTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(merged, null, 2),
+              text: formatJson(merged),
             },
           ],
         };

@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
+import { formatJson } from "./output.js";
+import { CREATE, READ_ONLY } from "./annotations.js";
 
 export function registerCommentTools(
   server: McpServer,
@@ -19,6 +21,7 @@ export function registerCommentTools(
         .optional()
         .describe("Maximum number of results (default: 50)"),
     },
+    READ_ONLY,
     async ({ caseId, limit }) => {
       try {
         const comments = await client.listComments(caseId, limit);
@@ -26,7 +29,7 @@ export function registerCommentTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(comments, null, 2),
+              text: formatJson(comments),
             },
           ],
         };
@@ -53,6 +56,7 @@ export function registerCommentTools(
         .string()
         .describe("Comment message (supports markdown)"),
     },
+    CREATE,
     async ({ caseId, message }) => {
       try {
         const created = await client.createComment(caseId, message);
@@ -60,7 +64,7 @@ export function registerCommentTools(
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(created, null, 2),
+              text: formatJson(created),
             },
           ],
         };
