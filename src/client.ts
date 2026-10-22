@@ -792,6 +792,48 @@ export class TheHiveClient {
     );
   }
 
+  // --- Similarity ---
+
+  async getSimilarCases(
+    entityType: "alert" | "case",
+    entityId: string,
+    limit: number = 50,
+  ): Promise<Record<string, unknown>[]> {
+    return this.querySimilar(entityType, entityId, "similarCasesLight", limit);
+  }
+
+  async getSimilarAlerts(
+    entityType: "alert" | "case",
+    entityId: string,
+    limit: number = 50,
+  ): Promise<Record<string, unknown>[]> {
+    return this.querySimilar(entityType, entityId, "similarAlertsLight", limit);
+  }
+
+  private async querySimilar(
+    entityType: "alert" | "case",
+    entityId: string,
+    similarityQuery: "similarCasesLight" | "similarAlertsLight",
+    limit: number,
+  ): Promise<Record<string, unknown>[]> {
+    const queryFilters: Record<string, unknown>[] = [
+      {
+        _name: entityType === "alert" ? "getAlert" : "getCase",
+        idOrName: entityId,
+      },
+      { _name: similarityQuery },
+    ];
+
+    // TheHive does not support pagination on the similarity operations, so the
+    // cap is applied to the returned list instead of sent as a range.
+    const clampedLimit = Math.min(Math.max(limit, 1), 500);
+    const results = await this.query<Record<string, unknown>>(
+      `${entityType}-${similarityQuery}`,
+      queryFilters,
+    );
+    return results.slice(0, clampedLimit);
+  }
+
   // --- Users ---
 
   async listUsers(limit: number = 100): Promise<TheHiveUser[]> {

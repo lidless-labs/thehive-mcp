@@ -5,6 +5,7 @@ import { TheHiveClient } from "../src/client.js";
 import { registerCaseTools } from "../src/tools/cases.js";
 import { registerAlertTools } from "../src/tools/alerts.js";
 import { registerAlertDetailTools } from "../src/tools/alert-details.js";
+import { registerSimilarTools } from "../src/tools/similar.js";
 import { registerTaskTools } from "../src/tools/tasks.js";
 import { registerObservableTools } from "../src/tools/observables.js";
 import { registerTaskLogTools } from "../src/tools/task-logs.js";
@@ -112,6 +113,17 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_search_observables");
   });
 
+  it("should register 2 similarity tools", () => {
+    registerSimilarTools(server, client);
+
+    expect(toolSpy).toHaveBeenCalledTimes(2);
+    const toolNames = toolSpy.mock.calls.map(
+      (call: unknown[]) => call[0] as string,
+    );
+    expect(toolNames).toContain("thehive_get_similar_cases");
+    expect(toolNames).toContain("thehive_get_similar_alerts");
+  });
+
   it("should register 4 alert detail tools", () => {
     registerAlertDetailTools(server, client);
 
@@ -212,10 +224,11 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_list_case_templates");
   });
 
-  it("should register all 52 tools total", () => {
+  it("should register all 54 tools total", () => {
     registerCaseTools(server, client);
     registerAlertTools(server, client);
     registerAlertDetailTools(server, client);
+    registerSimilarTools(server, client);
     registerTaskTools(server, client);
     registerObservableTools(server, client);
     registerTaskLogTools(server, client);
@@ -226,7 +239,7 @@ describe("tool registration", () => {
     registerQueryTools(server, client);
     registerTemplateTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(52);
+    expect(toolSpy).toHaveBeenCalledTimes(54);
   });
 
   it("should disable destructive case tools by default", async () => {
@@ -340,6 +353,66 @@ describe("tool registration", () => {
     expect(result.content[0]?.text).toContain("THEHIVE_ENABLE_RAW_QUERY=true");
   });
 
+  describe("similarity tools", () => {
+    type ToolResult = { isError?: boolean; content: Array<{ text: string }> };
+    const find = (name: string) => {
+      registerSimilarTools(server, client);
+      return toolSpy.mock.calls.find((c: unknown[]) => c[0] === name) as unknown[];
+    };
+
+    it("returns similar cases and alerts", async () => {
+      const casesSpy = vi
+        .spyOn(client, "getSimilarCases")
+        .mockResolvedValue([{ case: { _id: "~c2" } }]);
+      const alertsSpy = vi
+        .spyOn(client, "getSimilarAlerts")
+        .mockResolvedValue([{ alert: { _id: "~a2" } }]);
+
+      const cases = await (find("thehive_get_similar_cases").at(-1) as (a: unknown) => Promise<ToolResult>)({
+        entityType: "alert",
+        entityId: "~a1",
+        limit: 5,
+      });
+      const alerts = await (find("thehive_get_similar_alerts").at(-1) as (a: unknown) => Promise<ToolResult>)({
+        entityType: "case",
+        entityId: "~c1",
+      });
+
+      expect(casesSpy).toHaveBeenCalledWith("alert", "~a1", 5);
+      expect(JSON.parse(cases.content[0]?.text ?? "[]")[0].case._id).toBe("~c2");
+      expect(alertsSpy).toHaveBeenCalledWith("case", "~c1", undefined);
+      expect(JSON.parse(alerts.content[0]?.text ?? "[]")[0].alert._id).toBe("~a2");
+    });
+
+    it("rejects an invalid entityType", () => {
+      for (const name of ["thehive_get_similar_cases", "thehive_get_similar_alerts"]) {
+        const schema = z.object(find(name)[2] as z.ZodRawShape);
+        expect(schema.safeParse({ entityType: "task", entityId: "~t1" }).success, name).toBe(false);
+        expect(schema.safeParse({ entityType: "case", entityId: "" }).success, name).toBe(false);
+        expect(schema.safeParse({ entityType: "case", entityId: "~c1", limit: 501 }).success, name).toBe(false);
+        expect(schema.safeParse({ entityType: "alert", entityId: "~a1" }).success, name).toBe(true);
+      }
+    });
+
+    it("returns isError when the upstream call fails", async () => {
+      vi.spyOn(client, "getSimilarCases").mockRejectedValue(new Error("TheHive API resource not found"));
+      vi.spyOn(client, "getSimilarAlerts").mockRejectedValue(new Error("TheHive API internal server error"));
+
+      const cases = await (find("thehive_get_similar_cases").at(-1) as (a: unknown) => Promise<ToolResult>)({
+        entityType: "case",
+        entityId: "~c1",
+      });
+      const alerts = await (find("thehive_get_similar_alerts").at(-1) as (a: unknown) => Promise<ToolResult>)({
+        entityType: "case",
+        entityId: "~c1",
+      });
+
+      expect(cases.isError).toBe(true);
+      expect(cases.content[0]?.text).toContain("Error getting similar cases");
+      expect(alerts.isError).toBe(true);
+      expect(alerts.content[0]?.text).toContain("Error getting similar alerts");
+    });
+  });
   describe("thehive_update_observable", () => {
     type ToolResult = { isError?: boolean; content: Array<{ text: string }> };
     const getHandler = () => {

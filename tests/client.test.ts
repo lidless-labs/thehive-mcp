@@ -325,6 +325,66 @@ describe("TheHiveClient", () => {
     });
   });
 
+  describe("similarity queries", () => {
+    const lastCall = () =>
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+
+    it.each([
+      ["alert", "getAlert"],
+      ["case", "getCase"],
+    ] as const)("should query similar cases for a %s", async (entityType, getter) => {
+      const similar = [{ case: { _id: "~c2" }, similarObservableCount: 2 }];
+      globalThis.fetch = mockFetch(similar);
+
+      const result = await client.getSimilarCases(entityType, "~e1", 25);
+
+      expect(result).toEqual(similar);
+      const [url, options] = lastCall();
+      expect(url).toBe(
+        `https://thehive.example.com/api/v1/query?name=${entityType}-similarCasesLight`,
+      );
+      expect(JSON.parse(options.body)).toEqual({
+        query: [{ _name: getter, idOrName: "~e1" }, { _name: "similarCasesLight" }],
+      });
+    });
+
+    it.each([
+      ["alert", "getAlert"],
+      ["case", "getCase"],
+    ] as const)("should query similar alerts for a %s", async (entityType, getter) => {
+      globalThis.fetch = mockFetch([]);
+
+      await client.getSimilarAlerts(entityType, "~e1");
+
+      const [url, options] = lastCall();
+      expect(url).toBe(
+        `https://thehive.example.com/api/v1/query?name=${entityType}-similarAlertsLight`,
+      );
+      expect(JSON.parse(options.body)).toEqual({
+        query: [{ _name: getter, idOrName: "~e1" }, { _name: "similarAlertsLight" }],
+      });
+    });
+
+    it("should never send a range, since similarity operations are not paginated", async () => {
+      globalThis.fetch = mockFetch([]);
+      await client.getSimilarCases("case", "~c1", 9999);
+      expect(JSON.parse(lastCall()[1].body)).not.toHaveProperty("range");
+    });
+
+    it("should apply the limit to the returned list, clamped to 1-500", async () => {
+      const rows = Array.from({ length: 600 }, (_, i) => ({ id: i }));
+
+      globalThis.fetch = mockFetch(rows);
+      expect(await client.getSimilarCases("case", "~c1", 25)).toHaveLength(25);
+
+      globalThis.fetch = mockFetch(rows);
+      expect(await client.getSimilarCases("case", "~c1", 9999)).toHaveLength(500);
+
+      globalThis.fetch = mockFetch(rows);
+      expect(await client.getSimilarAlerts("case", "~c1", 0)).toHaveLength(1);
+    });
+  });
+
   describe("alert observables and comments", () => {
     const lastCall = () =>
       (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
