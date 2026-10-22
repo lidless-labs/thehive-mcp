@@ -645,6 +645,31 @@ export class TheHiveClient {
     return Array.isArray(result) ? result[0] : result;
   }
 
+  async updateObservable(
+    observableId: string,
+    data: {
+      message?: string;
+      tlp?: number;
+      pap?: number;
+      tags?: string[];
+      addTags?: string[];
+      removeTags?: string[];
+      ioc?: boolean;
+      sighted?: boolean;
+      sightedAt?: number;
+      ignoreSimilarity?: boolean;
+    },
+  ): Promise<TheHiveObservable> {
+    await this.request<Record<string, never>>(
+      `/observable/${encodeURIComponent(observableId)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      },
+    );
+    return this.getObservable(observableId);
+  }
+
   async createObservableBulk(
     caseId: string,
     data: {

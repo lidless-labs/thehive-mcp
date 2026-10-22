@@ -9,6 +9,7 @@
 
 ### Added
 - All 47 tools declare MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
+- **`thehive_update_observable`** - Patch an existing observable (IOC, sighted, TLP/PAP, tags, message, similarity) and return the refreshed record
 - **`thehive_list_alert_observables`**, **`thehive_list_alert_comments`**, **`thehive_create_alert_observable`**, and **`thehive_create_alert_comment`** - Read and extend an alert's observables and comments without promoting it to a case
 
 ### Documentation

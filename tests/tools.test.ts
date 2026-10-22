@@ -96,14 +96,15 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_update_task");
   });
 
-  it("should register 5 observable tools", () => {
+  it("should register 6 observable tools", () => {
     registerObservableTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(5);
+    expect(toolSpy).toHaveBeenCalledTimes(6);
 
     const toolNames = toolSpy.mock.calls.map(
       (call: unknown[]) => call[0] as string,
     );
+    expect(toolNames).toContain("thehive_update_observable");
     expect(toolNames).toContain("thehive_list_observables");
     expect(toolNames).toContain("thehive_get_observable");
     expect(toolNames).toContain("thehive_create_observable");
@@ -211,7 +212,7 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_list_case_templates");
   });
 
-  it("should register all 51 tools total", () => {
+  it("should register all 52 tools total", () => {
     registerCaseTools(server, client);
     registerAlertTools(server, client);
     registerAlertDetailTools(server, client);
@@ -225,7 +226,7 @@ describe("tool registration", () => {
     registerQueryTools(server, client);
     registerTemplateTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(51);
+    expect(toolSpy).toHaveBeenCalledTimes(52);
   });
 
   it("should disable destructive case tools by default", async () => {
@@ -339,6 +340,54 @@ describe("tool registration", () => {
     expect(result.content[0]?.text).toContain("THEHIVE_ENABLE_RAW_QUERY=true");
   });
 
+  describe("thehive_update_observable", () => {
+    type ToolResult = { isError?: boolean; content: Array<{ text: string }> };
+    const getHandler = () => {
+      registerObservableTools(server, client);
+      const call = toolSpy.mock.calls.find(
+        (c: unknown[]) => c[0] === "thehive_update_observable",
+      );
+      expect(call).toBeDefined();
+      return call?.at(-1) as (args: Record<string, unknown>) => Promise<ToolResult>;
+    };
+
+    it("rejects an empty update before sending any request", async () => {
+      const updateSpy = vi.spyOn(client, "updateObservable");
+      const handler = getHandler();
+
+      const result = await handler({ observableId: "~o1" });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("at least one field");
+      expect(updateSpy).not.toHaveBeenCalled();
+    });
+
+    it("updates an observable and returns the refreshed record", async () => {
+      const updateSpy = vi
+        .spyOn(client, "updateObservable")
+        .mockResolvedValue({ _id: "~o1", dataType: "ip", ioc: true } as never);
+      const handler = getHandler();
+
+      const result = await handler({ observableId: "~o1", ioc: true, tags: undefined });
+
+      expect(result.isError).toBeUndefined();
+      expect(updateSpy).toHaveBeenCalledWith("~o1", { ioc: true });
+      expect(JSON.parse(result.content[0]?.text ?? "{}")._id).toBe("~o1");
+    });
+
+    it("returns isError when the upstream call fails", async () => {
+      vi.spyOn(client, "updateObservable").mockRejectedValue(
+        new Error("TheHive API access denied - insufficient permissions"),
+      );
+      const handler = getHandler();
+
+      const result = await handler({ observableId: "~o1", sighted: true });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("Error updating observable");
+      expect(result.content[0]?.text).toContain("access denied");
+    });
+  });
   describe("alert detail tools", () => {
     type ToolResult = { isError?: boolean; content: Array<{ text: string }> };
     const handlerOf = (name: string) => {
@@ -437,6 +486,7 @@ describe("tool registration", () => {
       expect(commentSchema.safeParse({ alertId: "~a1" }).success).toBe(false);
     });
   });
+
   type ToolResult = { isError?: boolean; content: Array<{ text: string }> };
   const handlerOf = (name: string) =>
     toolSpy.mock.calls.find((call: unknown[]) => call[0] === name)?.at(-1) as (
