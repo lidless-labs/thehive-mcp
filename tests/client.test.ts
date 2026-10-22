@@ -385,6 +385,87 @@ describe("TheHiveClient", () => {
     });
   });
 
+  describe("alert observables and comments", () => {
+    const lastCall = () =>
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+
+    it("should query alert observables with the exact query body", async () => {
+      const obs = [{ _id: "~o1", dataType: "ip", data: "198.51.100.7" }];
+      globalThis.fetch = mockFetch(obs);
+
+      const result = await client.listAlertObservables("~a1", 20);
+
+      expect(result).toEqual(obs);
+      const [url, options] = lastCall();
+      expect(url).toBe("https://thehive.example.com/api/v1/query?name=alert-observables");
+      expect(JSON.parse(options.body)).toEqual({
+        query: [{ _name: "getAlert", idOrName: "~a1" }, { _name: "observables" }],
+        range: "0-20",
+        sort: ["-_createdAt"],
+      });
+    });
+
+    it("should clamp the alert observable limit to 500", async () => {
+      globalThis.fetch = mockFetch([]);
+
+      await client.listAlertObservables("~a1", 9999);
+
+      expect(JSON.parse(lastCall()[1].body).range).toBe("0-500");
+    });
+
+    it("should query alert comments with the exact query body", async () => {
+      const comments = [{ _id: "~m1", message: "Looks like phishing" }];
+      globalThis.fetch = mockFetch(comments);
+
+      const result = await client.listAlertComments("~a1");
+
+      expect(result).toEqual(comments);
+      const [url, options] = lastCall();
+      expect(url).toBe("https://thehive.example.com/api/v1/query?name=alert-comments");
+      expect(JSON.parse(options.body)).toEqual({
+        query: [{ _name: "getAlert", idOrName: "~a1" }, { _name: "comments" }],
+        range: "0-50",
+        sort: ["-_createdAt"],
+      });
+    });
+
+    it("should POST an alert observable and unwrap the array response", async () => {
+      const created = { _id: "~o2", dataType: "domain", data: "bad.example.com" };
+      globalThis.fetch = mockFetch([created]);
+
+      const result = await client.createAlertObservable("~a1", {
+        dataType: "domain",
+        data: "bad.example.com",
+        ioc: true,
+        tags: ["phish"],
+      });
+
+      expect(result).toEqual(created);
+      const [url, options] = lastCall();
+      expect(url).toBe("https://thehive.example.com/api/v1/alert/~a1/observable");
+      expect(options.method).toBe("POST");
+      expect(JSON.parse(options.body)).toEqual({
+        dataType: "domain",
+        data: "bad.example.com",
+        ioc: true,
+        tags: ["phish"],
+      });
+    });
+
+    it("should POST an alert comment", async () => {
+      const created = { _id: "~m2", message: "Triaged" };
+      globalThis.fetch = mockFetch(created);
+
+      const result = await client.createAlertComment("~a1", "Triaged");
+
+      expect(result).toEqual(created);
+      const [url, options] = lastCall();
+      expect(url).toBe("https://thehive.example.com/api/v1/alert/~a1/comment");
+      expect(options.method).toBe("POST");
+      expect(JSON.parse(options.body)).toEqual({ message: "Triaged" });
+    });
+  });
+
   describe("tasks", () => {
     it("should list tasks for a case", async () => {
       const mockTasks = [
@@ -467,6 +548,25 @@ describe("TheHiveClient", () => {
       expect(url).toBe(
         "https://thehive.example.com/api/v1/case/~c1/observable",
       );
+    });
+
+    it("should update an observable with PATCH then re-fetch it", async () => {
+      const refreshed = { _id: "~o1", dataType: "ip", data: "10.0.0.1", ioc: true };
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 204, json: () => Promise.resolve({}), text: () => Promise.resolve("") })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(refreshed), text: () => Promise.resolve(JSON.stringify(refreshed)) });
+      globalThis.fetch = fetchMock;
+
+      const result = await client.updateObservable("~o1", { ioc: true, addTags: ["c2"] });
+
+      expect(result).toEqual(refreshed);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const [patchUrl, patchOptions] = fetchMock.mock.calls[0];
+      expect(patchUrl).toBe("https://thehive.example.com/api/v1/observable/~o1");
+      expect(patchOptions.method).toBe("PATCH");
+      expect(JSON.parse(patchOptions.body)).toEqual({ ioc: true, addTags: ["c2"] });
+      const [getUrl] = fetchMock.mock.calls[1];
+      expect(getUrl).toBe("https://thehive.example.com/api/v1/observable/~o1");
     });
 
     it("should search observables globally", async () => {

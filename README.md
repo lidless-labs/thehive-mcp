@@ -26,7 +26,7 @@ thehive-mcp is a Model Context Protocol server for [TheHive](https://thehive-pro
 
 ## What it does
 
-thehive-mcp is an MCP server for **TheHive** incident response and case management. It exposes 49 Model Context Protocol tools that map onto the full TheHive 5 API surface, so an MCP client (Claude Desktop, Claude Code, Codex CLI, OpenClaw, Hermes, or any other) can drive a security operations center: create and triage cases, manage alerts, add and search observables, run and poll Cortex analyzers, file task logs and comments, and orchestrate SOAR-style incident response workflows in plain language. It talks to your TheHive instance over its REST API and speaks MCP over stdio, so it slots into any agent that supports the protocol with no extra service to run.
+thehive-mcp is an MCP server for **TheHive** incident response and case management. It exposes 54 Model Context Protocol tools that map onto the full TheHive 5 API surface, so an MCP client (Claude Desktop, Claude Code, Codex CLI, OpenClaw, Hermes, or any other) can drive a security operations center: create and triage cases, manage alerts, add and search observables, run and poll Cortex analyzers, file task logs and comments, and orchestrate SOAR-style incident response workflows in plain language. It talks to your TheHive instance over its REST API and speaks MCP over stdio, so it slots into any agent that supports the protocol with no extra service to run.
 
 The differentiator is safety. Irreversible operations (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`), the bulk case tools (`thehive_bulk_assign_cases`, `thehive_bulk_close_cases`), and the raw Query DSL tool are gated off by default and only become callable when you opt in with an environment variable. TLS relaxation is scoped to TheHive requests only, never the whole process. The server is tested against a live **TheHive 5.4.11** instance across read, write, and destructive workflows.
 
@@ -90,7 +90,7 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 
 ## Tools
 
-49 tools across cases, alerts, tasks, observables, Cortex, and more. The six destructive tools and the raw query tool are gated behind environment flags as noted.
+54 tools across cases, alerts, tasks, observables, Cortex, and more. The six destructive tools and the raw query tool are gated behind environment flags as noted.
 
 ### Cases (16 tools)
 
@@ -113,7 +113,7 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 | `thehive_delete_case` | Permanently delete a case (with optional force). Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
 | `thehive_merge_cases` | Merge multiple cases into one (irreversible). Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
 
-### Alerts (6 tools)
+### Alerts (10 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -123,6 +123,10 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 | `thehive_update_alert` | Update alert fields |
 | `thehive_promote_alert` | Promote an alert to a case (creates a new case). Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
 | `thehive_delete_alert` | Permanently delete an alert. Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
+| `thehive_list_alert_observables` | List observables attached to an alert |
+| `thehive_list_alert_comments` | List comments on an alert |
+| `thehive_create_alert_observable` | Add an observable to an alert without promoting it |
+| `thehive_create_alert_comment` | Add a comment to an alert |
 
 ### Tasks (4 tools)
 
@@ -133,7 +137,7 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 | `thehive_create_task` | Create a task in a case |
 | `thehive_update_task` | Update task fields (status, assignee, etc.) |
 
-### Observables (5 tools)
+### Observables (6 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -141,6 +145,7 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 | `thehive_get_observable` | Get a specific observable by ID |
 | `thehive_create_observable` | Add a single observable to a case |
 | `thehive_create_observable_bulk` | Add multiple observables of the same type in one request |
+| `thehive_update_observable` | Update an observable (IOC, sighted, TLP/PAP, tags, message) |
 | `thehive_search_observables` | Search observables across all cases |
 
 ### Task Logs (2 tools)
@@ -320,7 +325,7 @@ If you run from a source checkout instead of the npm package, point `command`/`a
 
 ## Why not the TheHive REST API directly?
 
-You can, and for a script you should. The REST API is the right tool when you already know exactly which endpoint you want. thehive-mcp exists for the case where an AI agent is doing the deciding: it turns the API into 49 named, typed, described tools an MCP client can pick from in natural language, handles the TheHive 5 quirks (204 PATCH responses, array-shaped observable creation, connector endpoints under `/api/connector/`), and puts safety rails in front of the irreversible verbs so a model cannot delete or merge case data unless you explicitly opted in. A raw HTTP client gives you none of that.
+You can, and for a script you should. The REST API is the right tool when you already know exactly which endpoint you want. thehive-mcp exists for the case where an AI agent is doing the deciding: it turns the API into 54 named, typed, described tools an MCP client can pick from in natural language, handles the TheHive 5 quirks (204 PATCH responses, array-shaped observable creation, connector endpoints under `/api/connector/`), and puts safety rails in front of the irreversible verbs so a model cannot delete or merge case data unless you explicitly opted in. A raw HTTP client gives you none of that.
 
 ## Why not a generic OpenAPI-to-MCP bridge?
 
