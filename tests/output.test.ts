@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   formatJson,
+  formatJsonDocument,
   settleWithConcurrency,
   truncateText,
 } from "../src/tools/output.js";
@@ -18,6 +19,29 @@ describe("formatJson", () => {
 
   it("serializes undefined without throwing", () => {
     expect(formatJson(undefined)).toBe("null");
+  });
+});
+
+describe("formatJsonDocument", () => {
+  it("returns indented JSON when under the limit", () => {
+    expect(formatJsonDocument([1])).toBe("[\n  1\n]");
+  });
+
+  it("keeps an oversized array parseable by dropping trailing items", () => {
+    const items = Array.from({ length: 200 }, (_, i) => ({ id: i, pad: "p".repeat(50) }));
+    const text = formatJsonDocument(items, 2_000);
+    expect(text.length).toBeLessThanOrEqual(2_000);
+    const parsed = JSON.parse(text);
+    expect(parsed.truncated).toBe(true);
+    expect(parsed.total).toBe(200);
+    expect(parsed.returned).toBe(parsed.items.length);
+    expect(parsed.returned).toBeGreaterThan(0);
+    expect(parsed.items[0]).toEqual(items[0]);
+  });
+
+  it("replaces an oversized non-array value with a parseable stub", () => {
+    const parsed = JSON.parse(formatJsonDocument({ data: "y".repeat(500) }, 100));
+    expect(parsed.truncated).toBe(true);
   });
 });
 

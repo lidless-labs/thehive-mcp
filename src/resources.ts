@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TheHiveClient } from "./client.js";
-import { formatJson } from "./tools/output.js";
+import { formatJsonDocument } from "./tools/output.js";
 
 export function registerResources(
   server: McpServer,
@@ -26,7 +26,7 @@ export function registerResources(
           {
             uri: "thehive://cases/open",
             mimeType: "application/json",
-            text: formatJson(allOpen),
+            text: formatJsonDocument(allOpen),
           },
         ],
       };
@@ -51,7 +51,7 @@ export function registerResources(
           {
             uri: "thehive://alerts/new",
             mimeType: "application/json",
-            text: formatJson(alerts),
+            text: formatJsonDocument(alerts),
           },
         ],
       };
@@ -73,7 +73,7 @@ export function registerResources(
           {
             uri: "thehive://user/current",
             mimeType: "application/json",
-            text: formatJson(user),
+            text: formatJsonDocument(user),
           },
         ],
       };

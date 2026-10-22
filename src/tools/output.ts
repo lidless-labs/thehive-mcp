@@ -17,6 +17,35 @@ export function formatJson(value: unknown, maxChars: number = MAX_OUTPUT_CHARS):
   return `${text.slice(0, maxChars)}\n... [output truncated: ${omitted} characters omitted. Narrow the request with filters or a smaller limit.]`;
 }
 
+/**
+ * Serialize a resource payload that is declared `application/json`. Unlike
+ * `formatJson`, the result always parses: an oversized array is cut to the
+ * leading items that fit and wrapped in a `{ truncated, total, returned, items }`
+ * envelope; any other oversized value is replaced by a stub that reports its size.
+ */
+export function formatJsonDocument(value: unknown, maxChars: number = MAX_OUTPUT_CHARS): string {
+  const text = JSON.stringify(value, null, 2) ?? "null";
+  if (text.length <= maxChars) {
+    return text;
+  }
+  if (!Array.isArray(value)) {
+    return JSON.stringify({ truncated: true, characters: text.length, note: "Value exceeds the output limit." }, null, 2);
+  }
+  const envelope = (count: number) =>
+    JSON.stringify({ truncated: true, total: value.length, returned: count, items: value.slice(0, count) }, null, 2);
+  let low = 0;
+  let high = value.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (envelope(mid).length <= maxChars) {
+      low = mid;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return envelope(low);
+}
+
 /** Cap free-form text (such as an error message) at a fixed length. */
 export function truncateText(text: string, maxChars: number = MAX_OUTPUT_CHARS): string {
   if (text.length <= maxChars) {

@@ -656,6 +656,36 @@ describe("TheHiveClient", () => {
       expect(textSpy).not.toHaveBeenCalled();
     });
 
+    it("should stop reading a streamed body once the cap is exceeded", async () => {
+      let chunksRead = 0;
+      const chunk = new TextEncoder().encode("x".repeat(4_000_000));
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          chunksRead++;
+          controller.enqueue(chunk);
+        },
+      });
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(body, { status: 200 }));
+
+      await expect(client.getCase("~1")).rejects.toThrow("response too large");
+      expect(chunksRead).toBeLessThanOrEqual(5);
+    });
+
+    it("should bound how much of an error body is read", async () => {
+      let chunksRead = 0;
+      const chunk = new TextEncoder().encode("e".repeat(40_000));
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          chunksRead++;
+          controller.enqueue(chunk);
+        },
+      });
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(body, { status: 502 }));
+
+      await expect(client.getCase("~1")).rejects.toThrow("TheHive API error (502)");
+      expect(chunksRead).toBeLessThanOrEqual(4);
+    });
+
     it("should handle timeout", async () => {
       const slowClient = new TheHiveClient({ ...mockConfig, timeout: 1 });
       globalThis.fetch = mockSlowFetch();
