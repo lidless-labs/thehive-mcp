@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { TheHiveClient } from "../src/client.js";
 import { registerCaseTools } from "../src/tools/cases.js";
 import { registerAlertTools } from "../src/tools/alerts.js";
+import { registerAlertDetailTools } from "../src/tools/alert-details.js";
 import { registerTaskTools } from "../src/tools/tasks.js";
 import { registerObservableTools } from "../src/tools/observables.js";
 import { registerTaskLogTools } from "../src/tools/task-logs.js";
@@ -108,6 +110,20 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_search_observables");
   });
 
+  it("should register 4 alert detail tools", () => {
+    registerAlertDetailTools(server, client);
+
+    expect(toolSpy).toHaveBeenCalledTimes(4);
+
+    const toolNames = toolSpy.mock.calls.map(
+      (call: unknown[]) => call[0] as string,
+    );
+    expect(toolNames).toContain("thehive_list_alert_observables");
+    expect(toolNames).toContain("thehive_list_alert_comments");
+    expect(toolNames).toContain("thehive_create_alert_observable");
+    expect(toolNames).toContain("thehive_create_alert_comment");
+  });
+
   it("should register 2 task log tools", () => {
     registerTaskLogTools(server, client);
 
@@ -194,9 +210,10 @@ describe("tool registration", () => {
     expect(toolNames).toContain("thehive_list_case_templates");
   });
 
-  it("should register all 47 tools total", () => {
+  it("should register all 51 tools total", () => {
     registerCaseTools(server, client);
     registerAlertTools(server, client);
+    registerAlertDetailTools(server, client);
     registerTaskTools(server, client);
     registerObservableTools(server, client);
     registerTaskLogTools(server, client);
@@ -207,7 +224,7 @@ describe("tool registration", () => {
     registerQueryTools(server, client);
     registerTemplateTools(server, client);
 
-    expect(toolSpy).toHaveBeenCalledTimes(47);
+    expect(toolSpy).toHaveBeenCalledTimes(51);
   });
 
   it("should disable destructive case tools by default", async () => {
@@ -319,5 +336,103 @@ describe("tool registration", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("THEHIVE_ENABLE_RAW_QUERY=true");
+  });
+
+  describe("alert detail tools", () => {
+    type ToolResult = { isError?: boolean; content: Array<{ text: string }> };
+    const handlerOf = (name: string) => {
+      registerAlertDetailTools(server, client);
+      const call = toolSpy.mock.calls.find((c: unknown[]) => c[0] === name);
+      expect(call, name).toBeDefined();
+      return call?.at(-1) as (args: Record<string, unknown>) => Promise<ToolResult>;
+    };
+    const schemaOf = (name: string) => {
+      registerAlertDetailTools(server, client);
+      const call = toolSpy.mock.calls.find((c: unknown[]) => c[0] === name);
+      return z.object(call?.[2] as z.ZodRawShape);
+    };
+
+    it("lists alert observables and comments", async () => {
+      const obsSpy = vi
+        .spyOn(client, "listAlertObservables")
+        .mockResolvedValue([{ _id: "~o1", dataType: "ip" }] as never);
+      const commentSpy = vi
+        .spyOn(client, "listAlertComments")
+        .mockResolvedValue([{ _id: "~m1", message: "hi" }] as never);
+
+      const observables = await handlerOf("thehive_list_alert_observables")({
+        alertId: "~a1",
+        limit: 10,
+      });
+      const comments = await handlerOf("thehive_list_alert_comments")({ alertId: "~a1" });
+
+      expect(obsSpy).toHaveBeenCalledWith("~a1", 10);
+      expect(JSON.parse(observables.content[0]?.text ?? "[]")[0]._id).toBe("~o1");
+      expect(commentSpy).toHaveBeenCalledWith("~a1", undefined);
+      expect(JSON.parse(comments.content[0]?.text ?? "[]")[0]._id).toBe("~m1");
+    });
+
+    it("creates an alert observable and comment without any gate", async () => {
+      const obsSpy = vi
+        .spyOn(client, "createAlertObservable")
+        .mockResolvedValue({ _id: "~o2", dataType: "ip" } as never);
+      const commentSpy = vi
+        .spyOn(client, "createAlertComment")
+        .mockResolvedValue({ _id: "~m2", message: "Triaged" } as never);
+
+      const observable = await handlerOf("thehive_create_alert_observable")({
+        alertId: "~a1",
+        dataType: "ip",
+        data: "198.51.100.7",
+        ioc: true,
+      });
+      const comment = await handlerOf("thehive_create_alert_comment")({
+        alertId: "~a1",
+        message: "Triaged",
+      });
+
+      expect(observable.isError).toBeUndefined();
+      expect(obsSpy).toHaveBeenCalledWith("~a1", {
+        dataType: "ip",
+        data: "198.51.100.7",
+        ioc: true,
+      });
+      expect(comment.isError).toBeUndefined();
+      expect(commentSpy).toHaveBeenCalledWith("~a1", "Triaged");
+    });
+
+    it("returns isError when an upstream call fails", async () => {
+      vi.spyOn(client, "listAlertObservables").mockRejectedValue(new Error("TheHive API resource not found"));
+      vi.spyOn(client, "listAlertComments").mockRejectedValue(new Error("TheHive API resource not found"));
+      vi.spyOn(client, "createAlertObservable").mockRejectedValue(new Error("TheHive API access denied"));
+      vi.spyOn(client, "createAlertComment").mockRejectedValue(new Error("TheHive API access denied"));
+
+      const results = [
+        await handlerOf("thehive_list_alert_observables")({ alertId: "~a1" }),
+        await handlerOf("thehive_list_alert_comments")({ alertId: "~a1" }),
+        await handlerOf("thehive_create_alert_observable")({ alertId: "~a1", dataType: "ip", data: "198.51.100.7" }),
+        await handlerOf("thehive_create_alert_comment")({ alertId: "~a1", message: "x" }),
+      ];
+
+      for (const result of results) {
+        expect(result.isError).toBe(true);
+        expect(result.content[0]?.text).toMatch(/^Error /);
+      }
+    });
+
+    it("validates arguments", () => {
+      const listSchema = schemaOf("thehive_list_alert_observables");
+      expect(listSchema.safeParse({ alertId: "~a1", limit: 0 }).success).toBe(false);
+      expect(listSchema.safeParse({ alertId: "~a1", limit: 501 }).success).toBe(false);
+      expect(listSchema.safeParse({ alertId: "~a1", limit: 500 }).success).toBe(true);
+
+      const createSchema = schemaOf("thehive_create_alert_observable");
+      expect(createSchema.safeParse({ alertId: "~a1", dataType: "bogus", data: "x" }).success).toBe(false);
+      expect(createSchema.safeParse({ alertId: "~a1", dataType: "ip", data: "x", tlp: 9 }).success).toBe(false);
+
+      const commentSchema = schemaOf("thehive_create_alert_comment");
+      expect(commentSchema.safeParse({ alertId: "~a1", message: "" }).success).toBe(false);
+      expect(commentSchema.safeParse({ alertId: "~a1" }).success).toBe(false);
+    });
   });
 });

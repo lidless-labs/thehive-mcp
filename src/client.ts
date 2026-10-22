@@ -383,6 +383,76 @@ export class TheHiveClient {
     );
   }
 
+  async listAlertObservables(
+    alertId: string,
+    limit: number = 50,
+  ): Promise<TheHiveObservable[]> {
+    const queryFilters: Record<string, unknown>[] = [
+      { _name: "getAlert", idOrName: alertId },
+      { _name: "observables" },
+    ];
+
+    const clampedLimit = Math.min(Math.max(limit, 1), 500);
+    return this.query<TheHiveObservable>("alert-observables", queryFilters, {
+      range: `0-${clampedLimit}`,
+      sort: ["-_createdAt"],
+    });
+  }
+
+  async listAlertComments(
+    alertId: string,
+    limit: number = 50,
+  ): Promise<TheHiveComment[]> {
+    const queryFilters: Record<string, unknown>[] = [
+      { _name: "getAlert", idOrName: alertId },
+      { _name: "comments" },
+    ];
+
+    const clampedLimit = Math.min(Math.max(limit, 1), 500);
+    return this.query<TheHiveComment>("alert-comments", queryFilters, {
+      range: `0-${clampedLimit}`,
+      sort: ["-_createdAt"],
+    });
+  }
+
+  async createAlertObservable(
+    alertId: string,
+    data: {
+      dataType: string;
+      data: string;
+      message?: string;
+      tags?: string[];
+      tlp?: number;
+      pap?: number;
+      ioc?: boolean;
+      sighted?: boolean;
+      ignoreSimilarity?: boolean;
+    },
+  ): Promise<TheHiveObservable> {
+    // TheHive 5 returns an array of observables from this endpoint
+    const result = await this.request<TheHiveObservable | TheHiveObservable[]>(
+      `/alert/${encodeURIComponent(alertId)}/observable`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    );
+    return Array.isArray(result) ? result[0] : result;
+  }
+
+  async createAlertComment(
+    alertId: string,
+    message: string,
+  ): Promise<TheHiveComment> {
+    return this.request<TheHiveComment>(
+      `/alert/${encodeURIComponent(alertId)}/comment`,
+      {
+        method: "POST",
+        body: JSON.stringify({ message }),
+      },
+    );
+  }
+
   async promoteAlert(alertId: string): Promise<TheHiveCase> {
     return this.request<TheHiveCase>(
       `/alert/${encodeURIComponent(alertId)}/case`,
