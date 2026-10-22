@@ -5,6 +5,8 @@ import { getConfig } from "./config.js";
 import { TheHiveClient } from "./client.js";
 import { registerCaseTools } from "./tools/cases.js";
 import { registerAlertTools } from "./tools/alerts.js";
+import { registerSimilarTools } from "./tools/similar.js";
+import { registerAlertDetailTools } from "./tools/alert-details.js";
 import { registerTaskTools } from "./tools/tasks.js";
 import { registerObservableTools } from "./tools/observables.js";
 import { registerTaskLogTools } from "./tools/task-logs.js";
@@ -47,6 +49,8 @@ async function main(): Promise<void> {
   registerAlertTools(server, client, {
     allowDestructiveTools: config.allowDestructiveTools,
   });
+  registerSimilarTools(server, client);
+  registerAlertDetailTools(server, client);
   registerTaskTools(server, client);
   registerObservableTools(server, client);
   registerTaskLogTools(server, client);
