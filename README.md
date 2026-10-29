@@ -431,3 +431,14 @@ PEM bundle at process startup. This extends trust while keeping certificate and
 hostname verification enabled. The existing `THEHIVE_VERIFY_SSL=false` escape
 hatch still affects only this client's dispatcher and never disables TLS
 verification process-wide.
+
+### Installer service permissions
+
+New installer services run as the dedicated `thehive-mcp` system account. The
+application tree and credential file stay root-owned, with the credential file
+readable only by root. Systemd reads that file before dropping privileges.
+The service uses a read-only system view, a private temporary directory, no
+capabilities, and no privilege escalation. Systemd manages writable state,
+cache, and runtime directories under the service name. The sandbox keeps Node's
+JIT available. Existing installations must recreate the service unit and
+service account to adopt these settings.

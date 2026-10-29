@@ -106,6 +106,10 @@ umask 077
 '
 pct exec "$CTID" -- bash -c "cd /opt/thehive-mcp && npm ci && npm run build && npm prune --omit=dev"
 
+# Dedicated service identity. The code and environment file remain root-owned.
+pct exec "$CTID" -- bash -c "id -u thehive-mcp >/dev/null 2>&1 || useradd --system --user-group --home-dir /var/lib/thehive-mcp --shell /usr/sbin/nologin thehive-mcp"
+pct exec "$CTID" -- bash -c "chown -R root:root /opt/thehive-mcp && chmod -R go-w /opt/thehive-mcp && chmod 600 /opt/thehive-mcp/.env"
+
 # Systemd service
 pct exec "$CTID" -- bash -c "cat > /etc/systemd/system/thehive-mcp.service << 'SVCEOF'
 [Unit]
@@ -114,6 +118,30 @@ After=network.target
 
 [Service]
 Type=simple
+User=thehive-mcp
+Group=thehive-mcp
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+StateDirectory=thehive-mcp
+StateDirectoryMode=0700
+CacheDirectory=thehive-mcp
+CacheDirectoryMode=0700
+RuntimeDirectory=thehive-mcp
+RuntimeDirectoryMode=0700
+Environment=HOME=/var/lib/thehive-mcp
+Environment=XDG_CACHE_HOME=/var/cache/thehive-mcp
 WorkingDirectory=/opt/thehive-mcp
 ExecStart=/usr/bin/node dist/index.js
 Restart=on-failure
