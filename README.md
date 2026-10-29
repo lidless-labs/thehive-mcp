@@ -99,10 +99,10 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 | `thehive_list_cases` | List cases with filters (status, severity, tags, owner) |
 | `thehive_get_case` | Get a specific case by ID |
 | `thehive_create_case` | Create a new case |
-| `thehive_update_case` | Update case fields (severity, status, tags, etc.) |
+| `thehive_update_case` | Update case fields. State and ownership changes require operator approval |
 | `thehive_search_cases` | Search cases by title keyword |
-| `thehive_close_case` | Close a case with resolution status and summary |
-| `thehive_assign_case` | Assign a case to a user |
+| `thehive_close_case` | Close a case with resolution status and summary. Requires operator approval |
+| `thehive_assign_case` | Assign a case to a user. Requires operator approval |
 | `thehive_update_case_custom_fields` | Update case custom fields |
 | `thehive_add_case_tags` | Add tags without replacing existing tags |
 | `thehive_remove_case_tags` | Remove selected tags |
@@ -120,7 +120,7 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 | `thehive_list_alerts` | List alerts with filters (status, severity, source, type) |
 | `thehive_get_alert` | Get a specific alert by ID |
 | `thehive_create_alert` | Create a new alert |
-| `thehive_update_alert` | Update alert fields |
+| `thehive_update_alert` | Update alert fields. Status changes require operator approval |
 | `thehive_promote_alert` | Promote an alert to a case (creates a new case). Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
 | `thehive_delete_alert` | Permanently delete an alert. Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
 | `thehive_list_alert_observables` | List observables attached to an alert |
@@ -219,7 +219,8 @@ Set environment variables:
 | `THEHIVE_API_KEY` | Yes | - | API key for authentication |
 | `THEHIVE_VERIFY_SSL` | No | `true` | Set to `false` only for trusted lab systems with self-signed TLS. When disabled, TLS verification is relaxed only for TheHive requests (via a scoped dispatcher), not for the whole process |
 | `THEHIVE_TIMEOUT` | No | `30` | Request timeout in seconds (1-300) |
-| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Set to `true` to enable destructive/irreversible MCP tools (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`, `thehive_run_responder`, `thehive_bulk_assign_cases`, `thehive_bulk_close_cases`) |
+| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Enable previews for destructive tools, bulk case operations, single-case close/assign, case state/ownership updates, case creation with an owner, and alert status updates. Execution also requires `dryRun: false` and `confirm: true` |
+| `THEHIVE_ALLOW_INSECURE_HTTP` | No | `false` | Explicitly permit plaintext HTTP API credentials outside loopback |
 | `THEHIVE_ENABLE_RAW_QUERY` | No | `false` | Set to `true` to enable the raw Query DSL MCP tool |
 
 ## Prompt Templates
@@ -321,7 +322,7 @@ If you run from a source checkout instead of the npm package, point `command`/`a
 - **Observable creation returns arrays.** The client handles this transparently. Bulk creation uses `data` as an array.
 - **Cortex connector endpoints** live under `/api/connector/` not `/api/v1/`.
 - **`description` is required** when creating cases and alerts.
-- **Destructive MCP tools are gated.** `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases` (irreversible), `thehive_promote_alert`, `thehive_run_responder`, `thehive_bulk_assign_cases`, and `thehive_bulk_close_cases` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`.
+- **Destructive MCP tools are gated.** `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases` (irreversible), `thehive_promote_alert`, `thehive_run_responder`, `thehive_bulk_assign_cases`, and `thehive_bulk_close_cases` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`. The same gate protects single-case close/assign, generic case state/ownership changes, case creation with an owner, and alert status changes. Calls preview locally until both `dryRun: false` and `confirm: true` are supplied.
 - **Tool output and upstream responses are bounded.** Every tool declares MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), tool text is capped at 100,000 characters, upstream response bodies are capped at 10 MB, and bulk tools issue at most 5 concurrent requests.
 - **Raw query is gated.** `thehive_query` requires `THEHIVE_ENABLE_RAW_QUERY=true`.
 - **SSL verification is scoped.** Setting `THEHIVE_VERIFY_SSL=false` relaxes TLS certificate validation only for requests to TheHive (via a per-client undici dispatcher) and never disables it process-wide. A warning is logged to stderr when enabled.
@@ -400,7 +401,9 @@ exact tool, targets, and parameters locally by default. Preview sends no network
 requests and does not validate target existence or permissions. Review the plan
 with the operator. Execution requires **both** `dryRun: false` and `confirm: true`
 on that call. These controls are never forwarded to TheHive. Enabling the flag
-alone no longer executes these operations. Confirmation does not supply
+alone no longer executes these operations. An explicit `dryRun: true` also
+prevents writes when these tools edit ordinary metadata or create an unassigned
+case. Confirmation does not supply
 idempotency: after a timeout, check upstream state before repeating a delete,
 merge, promotion, or responder execution.
 

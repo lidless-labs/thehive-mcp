@@ -177,7 +177,7 @@ export function registerCaseTools(
     },
     CREATE,
     async ({ dryRun, confirm, title, description, severity, tlp, pap, tags, flag, owner, template, customFields }) => {
-      if (owner !== undefined) {
+      if (owner !== undefined || dryRun === true) {
         const preflight = mutationPreflight("thehive_create_case", options, { dryRun, confirm }, { title, description, severity, tlp, pap, tags, flag, owner, template, customFields });
         if (preflight) return preflight;
       }
@@ -268,7 +268,7 @@ export function registerCaseTools(
     },
     UPDATE,
     async ({ dryRun, confirm, caseId, ...data }) => {
-      if ([data.status, data.owner, data.resolutionStatus, data.impactStatus].some((value) => value !== undefined)) {
+      if (dryRun === true || [data.status, data.owner, data.resolutionStatus, data.impactStatus].some((value) => value !== undefined)) {
         const preflight = mutationPreflight("thehive_update_case", options, { dryRun, confirm }, { caseId, ...data });
         if (preflight) return preflight;
       }

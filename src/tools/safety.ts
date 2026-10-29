@@ -32,7 +32,7 @@ export function rawQueryDisabled() {
 
 /** Explicit execution controls for tools with consequential side effects. */
 export const mutationControls = {
-  dryRun: z.boolean().optional().describe("Preview only (default: true). Set false to execute."),
+  dryRun: z.boolean().optional().describe("Preview protected mutations by default; true also previews other changes. Set false to execute protected mutations."),
   confirm: z.boolean().optional().describe("Set true only after the operator approves this exact operation."),
 };
 

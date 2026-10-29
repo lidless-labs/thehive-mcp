@@ -230,7 +230,7 @@ export function registerAlertTools(
     },
     UPDATE,
     async ({ dryRun, confirm, alertId, ...data }) => {
-      if (data.status !== undefined) {
+      if (data.status !== undefined || dryRun === true) {
         const preflight = mutationPreflight("thehive_update_alert", options, { dryRun, confirm }, { alertId, ...data });
         if (preflight) return preflight;
       }

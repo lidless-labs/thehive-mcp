@@ -67,6 +67,16 @@ describe("SOC-1 operator policy at MCP boundary", () => {
       expect(options.body ?? "").not.toMatch(/"(?:confirm|dryRun)"/);
     }
   });
+  it.each([
+    ["thehive_update_case", { caseId: "~1", title: "reviewed" }],
+    ["thehive_update_alert", { alertId: "~1", title: "reviewed" }],
+    ["thehive_create_case", { title: "incident" }],
+  ])("honors explicit dry-run for non-state %s changes", async (name, args) => {
+    const { tools, fetchSpy } = setup(true);
+    const result = await tools.get(name)({ ...args, dryRun: true });
+    expect(JSON.parse(result.content[0].text).data.dryRun).toBe(true);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
   it("keeps reads and non-state case edits available", async () => {
     const { tools, fetchSpy } = setup();
     await tools.get("thehive_get_case")({ caseId: "~1" });
