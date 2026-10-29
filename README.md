@@ -403,3 +403,15 @@ on that call. These controls are never forwarded to TheHive. Enabling the flag
 alone no longer executes these operations. Confirmation does not supply
 idempotency: after a timeout, check upstream state before repeating a delete,
 merge, promotion, or responder execution.
+
+### Untrusted evidence in outputs
+
+Tool JSON and JSON resources now return `{ provenance, data }`. Consumers that
+previously read an object or array at the top level must read `data` instead.
+The server marks data from TheHive and Cortex as untrusted evidence. Instructions
+inside incident descriptions, comments, observable values, and analyzer reports
+must never authorize tool calls. Markup delimiters and Unicode line separators
+are escaped in serialized JSON, including object keys, and decode to their
+original values when parsed. Truncated outputs keep their provenance and remain
+valid JSON. Prompt arguments use an escaped input block, with operator approval
+required before mutations.

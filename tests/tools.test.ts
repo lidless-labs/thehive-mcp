@@ -382,9 +382,9 @@ describe("tool registration", () => {
       });
 
       expect(casesSpy).toHaveBeenCalledWith("alert", "~a1", 5);
-      expect(JSON.parse(cases.content[0]?.text ?? "[]")[0].case._id).toBe("~c2");
+      expect(JSON.parse(cases.content[0]?.text ?? "[]").data[0].case._id).toBe("~c2");
       expect(alertsSpy).toHaveBeenCalledWith("case", "~c1", undefined);
-      expect(JSON.parse(alerts.content[0]?.text ?? "[]")[0].alert._id).toBe("~a2");
+      expect(JSON.parse(alerts.content[0]?.text ?? "[]").data[0].alert._id).toBe("~a2");
     });
 
     it("rejects an invalid entityType", () => {
@@ -448,7 +448,7 @@ describe("tool registration", () => {
 
       expect(result.isError).toBeUndefined();
       expect(updateSpy).toHaveBeenCalledWith("~o1", { ioc: true });
-      expect(JSON.parse(result.content[0]?.text ?? "{}")._id).toBe("~o1");
+      expect(JSON.parse(result.content[0]?.text ?? "{}").data._id).toBe("~o1");
     });
 
     it("returns isError when the upstream call fails", async () => {
@@ -493,9 +493,9 @@ describe("tool registration", () => {
       const comments = await handlerOf("thehive_list_alert_comments")({ alertId: "~a1" });
 
       expect(obsSpy).toHaveBeenCalledWith("~a1", 10);
-      expect(JSON.parse(observables.content[0]?.text ?? "[]")[0]._id).toBe("~o1");
+      expect(JSON.parse(observables.content[0]?.text ?? "[]").data[0]._id).toBe("~o1");
       expect(commentSpy).toHaveBeenCalledWith("~a1", undefined);
-      expect(JSON.parse(comments.content[0]?.text ?? "[]")[0]._id).toBe("~m1");
+      expect(JSON.parse(comments.content[0]?.text ?? "[]").data[0]._id).toBe("~m1");
     });
 
     it("creates an alert observable and comment without any gate", async () => {
@@ -727,7 +727,7 @@ describe("tool registration", () => {
     });
 
     expect(assigned.isError).toBe(false);
-    expect(JSON.parse(assigned.content[0]?.text ?? "{}").succeeded).toBe(2);
+    expect(JSON.parse(assigned.content[0]?.text ?? "{}").data.succeeded).toBe(2);
     expect(closed.isError).toBe(false);
     expect(updateSpy).toHaveBeenCalledWith("~1", { owner: "analyst@example.com" });
     expect(updateSpy).toHaveBeenCalledWith("~3", {
