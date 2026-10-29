@@ -300,9 +300,9 @@ describe("tool registration", () => {
     const mergeTool = toolSpy.mock.calls.find(
       (call: unknown[]) => call[0] === "thehive_merge_cases",
     );
-    const handler = mergeTool?.at(-1) as (args: { caseIds: string[] }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
+    const handler = mergeTool?.at(-1) as (args: { caseIds: string[]; dryRun: boolean; confirm: boolean }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
 
-    const result = await handler({ caseIds: ["~1", "~2"] });
+    const result = await handler({ dryRun: false, confirm: true, caseIds: ["~1", "~2"] });
 
     expect(result.isError).toBeUndefined();
     expect(mergeSpy).toHaveBeenCalledWith(["~1", "~2"]);
@@ -333,9 +333,9 @@ describe("tool registration", () => {
     const promoteTool = toolSpy.mock.calls.find(
       (call: unknown[]) => call[0] === "thehive_promote_alert",
     );
-    const handler = promoteTool?.at(-1) as (args: { alertId: string }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
+    const handler = promoteTool?.at(-1) as (args: { alertId: string; dryRun: boolean; confirm: boolean }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
 
-    const result = await handler({ alertId: "~alert" });
+    const result = await handler({ dryRun: false, confirm: true, alertId: "~alert" });
 
     expect(result.isError).toBeUndefined();
     expect(promoteSpy).toHaveBeenCalledWith("~alert");
@@ -599,6 +599,7 @@ describe("tool registration", () => {
       registerCortexTools(server, client, { allowDestructiveTools: true });
 
       const result = await handlerOf("thehive_run_responder")({
+        dryRun: false, confirm: true,
         ...runArgs,
         cortexId: "cortex",
         parameters: { message: "notify" },
@@ -620,7 +621,7 @@ describe("tool registration", () => {
       );
       registerCortexTools(server, client, { allowDestructiveTools: true });
 
-      const result = await handlerOf("thehive_run_responder")(runArgs);
+      const result = await handlerOf("thehive_run_responder")({ ...runArgs, dryRun: false, confirm: true });
 
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain("Error running responder");
@@ -714,10 +715,12 @@ describe("tool registration", () => {
     registerCaseTools(server, client, { allowDestructiveTools: true });
 
     const assigned = await handlerOf("thehive_bulk_assign_cases")({
+      dryRun: false, confirm: true,
       caseIds: ["~1", "~2"],
       owner: "analyst@example.com",
     });
     const closed = await handlerOf("thehive_bulk_close_cases")({
+      dryRun: false, confirm: true,
       caseIds: ["~3"],
       status: "TruePositive",
       summary: "Confirmed",

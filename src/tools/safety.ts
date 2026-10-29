@@ -1,3 +1,6 @@
+import { z } from "zod";
+import { formatJson } from "./output.js";
+
 export interface ToolSafetyOptions {
   allowDestructiveTools?: boolean;
   enableRawQuery?: boolean;
@@ -25,4 +28,32 @@ export function rawQueryDisabled() {
     ],
     isError: true,
   };
+}
+
+/** Explicit execution controls for tools with consequential side effects. */
+export const mutationControls = {
+  dryRun: z.boolean().optional().describe("Preview only (default: true). Set false to execute."),
+  confirm: z.boolean().optional().describe("Set true only after the operator approves this exact operation."),
+};
+
+/** Return a denial or a local plan before any upstream call. */
+export function mutationPreflight(
+  toolName: string,
+  options: ToolSafetyOptions,
+  controls: { dryRun?: boolean; confirm?: boolean },
+  operation: Record<string, unknown>,
+) {
+  if (!options.allowDestructiveTools) return destructiveToolDisabled(toolName);
+  if (controls.dryRun !== false) {
+    return { content: [{ type: "text" as const, text: formatJson({
+      dryRun: true, tool: toolName, operation,
+      note: "No requests sent. Review the targets and parameters, then use dryRun=false and confirm=true to execute.",
+    }) }] };
+  }
+  if (controls.confirm !== true) {
+    return { isError: true, content: [{ type: "text" as const,
+      text: `${toolName} requires confirm=true and dryRun=false after operator approval.`,
+    }] };
+  }
+  return undefined;
 }

@@ -385,3 +385,21 @@ Bug reports and patches are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for 
 
 <p align="center"><sub><a href="https://lidless.dev">All tools</a> &middot; <a href="https://github.com/lidless-labs">Lidless Labs on GitHub</a></sub></p>
 </content>
+
+### Operator approval for case and alert state changes
+
+`THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` defaults to `false`. It now also controls
+`thehive_close_case`, `thehive_assign_case`, state or ownership fields on
+`thehive_update_case`, an owner on `thehive_create_case`, and a status on
+`thehive_update_alert`. Case state fields include `status`, `resolutionStatus`,
+and `impactStatus`. Existing gated delete, merge, promote, responder, and bulk
+case tools use the same policy. Reads and other case edits remain available.
+
+Migration: after enabling the operator flag, consequential calls preview their
+exact tool, targets, and parameters locally by default. Preview sends no network
+requests and does not validate target existence or permissions. Review the plan
+with the operator. Execution requires **both** `dryRun: false` and `confirm: true`
+on that call. These controls are never forwarded to TheHive. Enabling the flag
+alone no longer executes these operations. Confirmation does not supply
+idempotency: after a timeout, check upstream state before repeating a delete,
+merge, promotion, or responder execution.

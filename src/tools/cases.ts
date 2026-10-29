@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
 import { ADDITIVE_IDEMPOTENT, CREATE, DESTRUCTIVE, READ_ONLY, UPDATE } from "./annotations.js";
 import { formatJson, settleWithConcurrency } from "./output.js";
-import { destructiveToolDisabled, type ToolSafetyOptions } from "./safety.js";
+import { mutationControls, mutationPreflight, type ToolSafetyOptions } from "./safety.js";
 
 const caseStatusSchema = z.enum([
   "New",
@@ -128,6 +128,7 @@ export function registerCaseTools(
     "thehive_create_case",
     "Create a new case in TheHive",
     {
+      ...mutationControls,
       title: z.string().describe("Case title"),
       description: z
         .string()
@@ -175,7 +176,12 @@ export function registerCaseTools(
         .describe("Case custom fields keyed by TheHive custom field name"),
     },
     CREATE,
-    async ({ title, description, severity, tlp, pap, tags, flag, owner, template, customFields }) => {
+    async ({ dryRun, confirm, title, description, severity, tlp, pap, tags, flag, owner, template, customFields }) => {
+      if (owner !== undefined) {
+        const preflight = mutationPreflight("thehive_create_case", options, { dryRun, confirm }, { title, description, severity, tlp, pap, tags, flag, owner, template, customFields });
+        if (preflight) return preflight;
+      }
+
       try {
         const created = await client.createCase({
           title,
@@ -215,6 +221,7 @@ export function registerCaseTools(
     "thehive_update_case",
     "Update an existing case",
     {
+      ...mutationControls,
       caseId: z.string().describe("The case ID to update"),
       title: z.string().optional().describe("New title"),
       description: z.string().optional().describe("New description"),
@@ -260,7 +267,12 @@ export function registerCaseTools(
         .describe("Custom fields to update, keyed by TheHive custom field name"),
     },
     UPDATE,
-    async ({ caseId, ...data }) => {
+    async ({ dryRun, confirm, caseId, ...data }) => {
+      if ([data.status, data.owner, data.resolutionStatus, data.impactStatus].some((value) => value !== undefined)) {
+        const preflight = mutationPreflight("thehive_update_case", options, { dryRun, confirm }, { caseId, ...data });
+        if (preflight) return preflight;
+      }
+
       try {
         const updated = await client.updateCase(caseId, data);
         return {
@@ -328,6 +340,7 @@ export function registerCaseTools(
     "thehive_close_case",
     "Close/resolve a case. In TheHive 5, the status field is the resolution status directly.",
     {
+      ...mutationControls,
       caseId: z.string().describe("The case ID to close"),
       status: z
         .enum(resolutionStatusSchema.options)
@@ -341,7 +354,10 @@ export function registerCaseTools(
         .describe("Case summary/conclusion explaining the resolution"),
     },
     UPDATE,
-    async ({ caseId, status, impactStatus, summary }) => {
+    async ({ dryRun, confirm, caseId, status, impactStatus, summary }) => {
+      const preflight = mutationPreflight("thehive_close_case", options, { dryRun, confirm }, { caseId, status, impactStatus, summary });
+      if (preflight) return preflight;
+
       try {
         const updated = await client.updateCase(caseId, {
           status,
@@ -374,11 +390,15 @@ export function registerCaseTools(
     "thehive_assign_case",
     "Assign a case to a TheHive user by username or login",
     {
+      ...mutationControls,
       caseId: z.string().describe("The case ID to assign"),
       owner: z.string().min(1).describe("Username or login to assign as case owner"),
     },
     UPDATE,
-    async ({ caseId, owner }) => {
+    async ({ dryRun, confirm, caseId, owner }) => {
+      const preflight = mutationPreflight("thehive_assign_case", options, { dryRun, confirm }, { caseId, owner });
+      if (preflight) return preflight;
+
       try {
         const updated = await client.updateCase(caseId, { owner });
         return {
@@ -544,14 +564,15 @@ export function registerCaseTools(
     "thehive_bulk_assign_cases",
     "Assign multiple cases to a TheHive user. Requires THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true.",
     {
+      ...mutationControls,
       caseIds: z.array(z.string()).min(1).max(50).describe("Case IDs to assign"),
       owner: z.string().min(1).describe("Username or login to assign as case owner"),
     },
     UPDATE,
-    async ({ caseIds, owner }) => {
-      if (!options.allowDestructiveTools) {
-        return destructiveToolDisabled("thehive_bulk_assign_cases");
-      }
+    async ({ dryRun, confirm, caseIds, owner }) => {
+      const preflight = mutationPreflight("thehive_bulk_assign_cases", options, { dryRun, confirm }, { caseIds, owner });
+      if (preflight) return preflight;
+
       const results = await settleWithConcurrency(caseIds, async (caseId) =>
         client.updateCase(caseId, { owner }),
       );
@@ -572,6 +593,7 @@ export function registerCaseTools(
     "thehive_bulk_close_cases",
     "Close multiple cases with the same resolution status and summary. Requires THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true.",
     {
+      ...mutationControls,
       caseIds: z.array(z.string()).min(1).max(50).describe("Case IDs to close"),
       status: z
         .enum(resolutionStatusSchema.options)
@@ -583,10 +605,10 @@ export function registerCaseTools(
       summary: z.string().min(1).describe("Case summary/conclusion explaining the resolution"),
     },
     UPDATE,
-    async ({ caseIds, status, impactStatus, summary }) => {
-      if (!options.allowDestructiveTools) {
-        return destructiveToolDisabled("thehive_bulk_close_cases");
-      }
+    async ({ dryRun, confirm, caseIds, status, impactStatus, summary }) => {
+      const preflight = mutationPreflight("thehive_bulk_close_cases", options, { dryRun, confirm }, { caseIds, status, impactStatus, summary });
+      if (preflight) return preflight;
+
       const results = await settleWithConcurrency(caseIds, async (caseId) =>
         client.updateCase(caseId, {
           status,
@@ -688,6 +710,7 @@ export function registerCaseTools(
     "thehive_delete_case",
     "Permanently delete a case. Use force=true to delete even if the case has tasks/observables.",
     {
+      ...mutationControls,
       caseId: z.string().describe("The case ID to delete"),
       force: z
         .boolean()
@@ -695,10 +718,10 @@ export function registerCaseTools(
         .describe("Force delete even if case has children (default: false)"),
     },
     DESTRUCTIVE,
-    async ({ caseId, force }) => {
-      if (!options.allowDestructiveTools) {
-        return destructiveToolDisabled("thehive_delete_case");
-      }
+    async ({ dryRun, confirm, caseId, force }) => {
+      const preflight = mutationPreflight("thehive_delete_case", options, { dryRun, confirm }, { caseId, force });
+      if (preflight) return preflight;
+
       try {
         await client.deleteCase(caseId, force);
         return {
@@ -727,16 +750,17 @@ export function registerCaseTools(
     "thehive_merge_cases",
     "Merge multiple cases into a single case. This is irreversible and data-destructive.",
     {
+      ...mutationControls,
       caseIds: z
         .array(z.string())
         .min(2)
         .describe("Array of case IDs to merge (minimum 2)"),
     },
     DESTRUCTIVE,
-    async ({ caseIds }) => {
-      if (!options.allowDestructiveTools) {
-        return destructiveToolDisabled("thehive_merge_cases");
-      }
+    async ({ dryRun, confirm, caseIds }) => {
+      const preflight = mutationPreflight("thehive_merge_cases", options, { dryRun, confirm }, { caseIds });
+      if (preflight) return preflight;
+
       try {
         const merged = await client.mergeCases(caseIds);
         return {

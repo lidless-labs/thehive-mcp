@@ -7,7 +7,7 @@ import {
   DESTRUCTIVE,
   READ_ONLY,
 } from "./annotations.js";
-import { destructiveToolDisabled, type ToolSafetyOptions } from "./safety.js";
+import { mutationControls, mutationPreflight, type ToolSafetyOptions } from "./safety.js";
 
 const entityTypeSchema = z
   .string()
@@ -372,6 +372,7 @@ export function registerCortexTools(
     "thehive_run_responder",
     "Run a Cortex responder on a case, alert, task, or observable. Responders have real-world side effects. Requires THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true.",
     {
+      ...mutationControls,
       responderId: z.string().min(1).describe("The Cortex responder ID to run"),
       cortexId: z
         .string()
@@ -394,10 +395,10 @@ export function registerCortexTools(
         .describe("TLP 2.0 to apply to the action: 0=Clear, 1=Green, 2=Amber, 3=Amber+Strict, 4=Red"),
     },
     { ...DESTRUCTIVE, openWorldHint: true },
-    async ({ responderId, cortexId, objectType, objectId, parameters, tlp }) => {
-      if (!options.allowDestructiveTools) {
-        return destructiveToolDisabled("thehive_run_responder");
-      }
+    async ({ dryRun, confirm, responderId, cortexId, objectType, objectId, parameters, tlp }) => {
+      const preflight = mutationPreflight("thehive_run_responder", options, { dryRun, confirm }, { responderId, cortexId, objectType, objectId, parameters, tlp });
+      if (preflight) return preflight;
+
       try {
         const action = await client.runResponder({
           responderId,

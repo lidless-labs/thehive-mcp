@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
 import { formatJson } from "./output.js";
 import { CREATE, DESTRUCTIVE, READ_ONLY, UPDATE } from "./annotations.js";
-import { destructiveToolDisabled, type ToolSafetyOptions } from "./safety.js";
+import { mutationControls, mutationPreflight, type ToolSafetyOptions } from "./safety.js";
 
 const alertStatusSchema = z.enum(["New", "Updated", "Ignored", "Imported"]);
 
@@ -202,6 +202,7 @@ export function registerAlertTools(
     "thehive_update_alert",
     "Update an existing alert",
     {
+      ...mutationControls,
       alertId: z.string().describe("The alert ID to update"),
       title: z.string().optional().describe("New title"),
       description: z.string().optional().describe("New description"),
@@ -228,7 +229,12 @@ export function registerAlertTools(
         .describe("Whether to follow the alert"),
     },
     UPDATE,
-    async ({ alertId, ...data }) => {
+    async ({ dryRun, confirm, alertId, ...data }) => {
+      if (data.status !== undefined) {
+        const preflight = mutationPreflight("thehive_update_alert", options, { dryRun, confirm }, { alertId, ...data });
+        if (preflight) return preflight;
+      }
+
       try {
         const updated = await client.updateAlert(alertId, data);
         return {
@@ -257,13 +263,14 @@ export function registerAlertTools(
     "thehive_promote_alert",
     "Promote an alert to a case. Creates a new case from the alert data.",
     {
+      ...mutationControls,
       alertId: z.string().describe("The alert ID to promote to a case"),
     },
     DESTRUCTIVE,
-    async ({ alertId }) => {
-      if (!options.allowDestructiveTools) {
-        return destructiveToolDisabled("thehive_promote_alert");
-      }
+    async ({ dryRun, confirm, alertId }) => {
+      const preflight = mutationPreflight("thehive_promote_alert", options, { dryRun, confirm }, { alertId });
+      if (preflight) return preflight;
+
       try {
         const promoted = await client.promoteAlert(alertId);
         return {
@@ -292,13 +299,14 @@ export function registerAlertTools(
     "thehive_delete_alert",
     "Permanently delete an alert",
     {
+      ...mutationControls,
       alertId: z.string().describe("The alert ID to delete"),
     },
     DESTRUCTIVE,
-    async ({ alertId }) => {
-      if (!options.allowDestructiveTools) {
-        return destructiveToolDisabled("thehive_delete_alert");
-      }
+    async ({ dryRun, confirm, alertId }) => {
+      const preflight = mutationPreflight("thehive_delete_alert", options, { dryRun, confirm }, { alertId });
+      if (preflight) return preflight;
+
       try {
         await client.deleteAlert(alertId);
         return {
