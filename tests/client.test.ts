@@ -1108,3 +1108,18 @@ describe("TheHiveClient", () => {
     });
   });
 });
+
+describe("SOC-3 client transport boundary", () => {
+  it("rejects plaintext remote URLs even when constructed without getConfig", () => {
+    expect(() => new TheHiveClient({ ...mockConfig, url: "http://thehive.example.com" })).toThrow("THEHIVE_ALLOW_INSECURE_HTTP");
+  });
+  it("does not follow redirects that could send credentials to plaintext or another origin", async () => {
+    const fetchSpy = vi.fn(async () => new Response(null, { status: 302, headers: { location: "http://other.example.com" } }));
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const client = new TheHiveClient(mockConfig);
+      await expect(client.getCase("~1")).rejects.toThrow("302");
+      expect(fetchSpy.mock.calls[0]?.[1]).toMatchObject({ redirect: "error" });
+    } finally { vi.unstubAllGlobals(); }
+  });
+});

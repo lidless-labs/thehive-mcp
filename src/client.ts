@@ -1,5 +1,5 @@
 import { Agent } from "undici";
-import type { TheHiveConfig } from "./config.js";
+import { parseTheHiveUrl, type TheHiveConfig } from "./config.js";
 import type {
   TheHiveCase,
   TheHiveAlert,
@@ -66,9 +66,10 @@ export class TheHiveClient {
   private readonly dispatcher?: Agent;
 
   constructor(config: TheHiveConfig) {
-    this.baseUrl = `${config.url}/api/v1`;
-    this.connectorBaseUrl = `${config.url}/api`;
-    this.statusUrl = `${config.url}/api/status`;
+    const url = parseTheHiveUrl(config.url, config.allowInsecureHttp);
+    this.baseUrl = `${url}/api/v1`;
+    this.connectorBaseUrl = `${url}/api`;
+    this.statusUrl = `${url}/api/status`;
     this.apiKey = config.apiKey;
     this.headers = {
       Authorization: `Bearer ${config.apiKey}`,
@@ -117,6 +118,7 @@ export class TheHiveClient {
         ...options,
         headers,
         signal: controller.signal,
+        redirect: "error",
         ...(this.dispatcher && { dispatcher: this.dispatcher }),
       });
 

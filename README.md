@@ -415,3 +415,19 @@ are escaped in serialized JSON, including object keys, and decode to their
 original values when parsed. Truncated outputs keep their provenance and remain
 valid JSON. Prompt arguments use an escaped input block, with operator approval
 required before mutations.
+
+### HTTPS and private certificate authorities
+
+Remote API URLs now require HTTPS by default. Migration: deployments that
+intentionally use plaintext beyond loopback must explicitly set
+`THEHIVE_ALLOW_INSECURE_HTTP=true`. This sends API credentials over plaintext.
+HTTP remains supported for literal IPv4 loopback addresses, IPv6 loopback, and
+`localhost`. Redirects are rejected for API and status requests, so an HTTPS
+endpoint cannot redirect a credential-bearing call elsewhere.
+
+For a private CA, keep `THEHIVE_VERIFY_SSL=true` and set
+`NODE_EXTRA_CA_CERTS=/path/to/ca-bundle.pem` before starting Node. Node loads the
+PEM bundle at process startup. This extends trust while keeping certificate and
+hostname verification enabled. The existing `THEHIVE_VERIFY_SSL=false` escape
+hatch still affects only this client's dispatcher and never disables TLS
+verification process-wide.

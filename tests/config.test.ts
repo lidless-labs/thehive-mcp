@@ -135,3 +135,26 @@ describe("getConfig", () => {
     expect(() => getConfig()).toThrow("THEHIVE_ENABLE_RAW_QUERY");
   });
 });
+
+describe("SOC-3 plaintext transport policy", () => {
+  const originalEnv = process.env;
+  beforeEach(() => { process.env = { ...originalEnv, THEHIVE_API_KEY: "fixture" }; delete process.env.THEHIVE_ALLOW_INSECURE_HTTP; });
+  afterEach(() => { process.env = originalEnv; });
+  it.each(["http://thehive.example.com", "http://192.0.2.20", "http://[2001:db8::1]", "http://localhost.example.com"])("rejects remote plaintext %s", (url) => {
+    process.env.THEHIVE_URL = url;
+    expect(() => getConfig()).toThrow("THEHIVE_ALLOW_INSECURE_HTTP");
+  });
+  it.each(["http://localhost:9000", "http://127.0.0.1:9000", "http://127.1.2.3", "http://[::1]:9000"])("supports loopback %s", (url) => {
+    process.env.THEHIVE_URL = url;
+    expect(getConfig().url).toBe(url);
+  });
+  it("requires a valid explicit opt-in for remote HTTP", () => {
+    process.env.THEHIVE_URL = "http://thehive.example.com";
+    process.env.THEHIVE_ALLOW_INSECURE_HTTP = "false";
+    expect(() => getConfig()).toThrow("THEHIVE_ALLOW_INSECURE_HTTP");
+    process.env.THEHIVE_ALLOW_INSECURE_HTTP = "yes";
+    expect(() => getConfig()).toThrow("must be true or false");
+    process.env.THEHIVE_ALLOW_INSECURE_HTTP = "true";
+    expect(getConfig().url).toBe("http://thehive.example.com");
+  });
+});
