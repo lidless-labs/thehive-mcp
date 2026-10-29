@@ -17,9 +17,6 @@ import type {
 /** Largest upstream response body (in characters) the client will parse. */
 const MAX_RESPONSE_CHARS = 10_000_000;
 
-/** Largest error body (in characters) read before it is summarised. */
-const MAX_ERROR_BODY_CHARS = 64_000;
-
 /**
  * Read a response body as text, stopping once `limit` characters have arrived.
  * Returns the text read so far and whether the body was cut off. Falls back to
@@ -123,10 +120,8 @@ export class TheHiveClient {
       });
 
       if (!response.ok) {
-        const body = await readBodyCapped(response, MAX_ERROR_BODY_CHARS)
-          .then((result) => result.text)
-          .catch(() => "");
-        const message = this.getErrorMessage(response.status, body);
+        void response.body?.cancel().catch(() => undefined);
+        const message = this.getErrorMessage(response.status);
         throw new Error(message);
       }
 
@@ -151,10 +146,12 @@ export class TheHiveClient {
         if (!body) {
           return {} as T;
         }
-        return JSON.parse(body) as T;
+        try { return JSON.parse(body) as T; }
+        catch { throw new Error("TheHive API returned invalid JSON"); }
       }
 
-      return (await response.json()) as T;
+      try { return (await response.json()) as T; }
+      catch { throw new Error("TheHive API returned invalid JSON"); }
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         throw new Error(`TheHive API timeout after ${this.timeout}ms`);
@@ -165,37 +162,21 @@ export class TheHiveClient {
     }
   }
 
-  private getErrorMessage(status: number, body: string): string {
-    const detail = this.formatErrorDetail(body);
+  private getErrorMessage(status: number): string {
     switch (status) {
       case 401:
-        return `TheHive API authentication failed - check your API key${detail}`;
+        return `TheHive API authentication failed - check your API key`;
       case 403:
-        return `TheHive API access denied - insufficient permissions${detail}`;
+        return `TheHive API access denied - insufficient permissions`;
       case 404:
-        return `TheHive API resource not found${detail}`;
+        return `TheHive API resource not found`;
       case 429:
-        return `TheHive API rate limit exceeded${detail}`;
+        return `TheHive API rate limit exceeded`;
       case 500:
-        return `TheHive API internal server error${detail}`;
+        return `TheHive API internal server error`;
       default:
-        return `TheHive API error (${status})${detail}`;
+        return `TheHive API error (${status})`;
     }
-  }
-
-  private formatErrorDetail(body: string): string {
-    const sanitized = this.redactSensitiveText(body)
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 200);
-    return sanitized ? `: ${sanitized}` : "";
-  }
-
-  private redactSensitiveText(text: string): string {
-    return text
-      .replaceAll(this.apiKey, "[REDACTED]")
-      .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
-      .replace(/("(?:api[_-]?key|authorization|token|password)"\s*:\s*")([^"]+)(")/gi, "$1[REDACTED]$3");
   }
 
   private async query<T>(
@@ -995,7 +976,7 @@ export class TheHiveClient {
       }
     }
 
-    throw new Error(`Cortex job ${jobId} did not complete after ${maxAttempts} attempts`);
+    throw new Error("Cortex job did not complete before the polling limit");
   }
 
   // --- Status ---
