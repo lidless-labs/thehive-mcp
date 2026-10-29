@@ -374,6 +374,10 @@ THEHIVE_URL=https://192.0.2.10:9000 THEHIVE_API_KEY=your-key npm run dev
 
 Bug reports and patches are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for what lands easily, [SECURITY.md](SECURITY.md) for reporting vulnerabilities, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Issue templates are under [.github/ISSUE_TEMPLATE](.github/ISSUE_TEMPLATE).
 
+### Container root access
+
+The installer creates no guest root password and locks password login after starting the container. Manage the guest from its Proxmox host with `pct enter`. Service API credentials continue to use protected stdin delivery and root-only storage.
+
 ## License
 
 [MIT](LICENSE)
