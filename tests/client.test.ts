@@ -812,13 +812,13 @@ describe("TheHiveClient", () => {
       );
     });
 
-    it("should redact sensitive error response details", async () => {
+    it("should omit sensitive error response details", async () => {
       globalThis.fetch = mockFetch(
         { message: "Bearer test-api-key-123 token leaked" },
         500,
       );
 
-      await expect(client.getCase("~1")).rejects.toThrow("[REDACTED]");
+      await expect(client.getCase("~1")).rejects.toThrow(/^TheHive API internal server error$/);
       await expect(client.getCase("~1")).rejects.not.toThrow("test-api-key-123");
     });
 
@@ -985,7 +985,7 @@ describe("TheHiveClient", () => {
         );
       });
 
-      it("should append sanitized error body detail to HTTP error messages", async () => {
+      it("should omit upstream error body details from HTTP errors", async () => {
         globalThis.fetch = vi.fn().mockResolvedValue({
           ok: false,
           status: 400,
@@ -993,11 +993,11 @@ describe("TheHiveClient", () => {
         });
 
         await expect(client.getCase("~1")).rejects.toThrow(
-          "TheHive API error (400): invalid case id",
+          "TheHive API error (400)",
         );
       });
 
-      it("should collapse whitespace in error body detail", async () => {
+      it("should omit whitespace-bearing upstream error text", async () => {
         globalThis.fetch = vi.fn().mockResolvedValue({
           ok: false,
           status: 400,
@@ -1005,11 +1005,11 @@ describe("TheHiveClient", () => {
         });
 
         await expect(client.getCase("~1")).rejects.toThrow(
-          ": invalid case id",
+          "TheHive API error (400)",
         );
       });
 
-      it("should truncate long error bodies to 200 characters", async () => {
+      it("should omit long error bodies entirely", async () => {
         const longBody = "x".repeat(250);
         globalThis.fetch = vi.fn().mockResolvedValue({
           ok: false,
@@ -1018,11 +1018,11 @@ describe("TheHiveClient", () => {
         });
 
         const error = await client.getCase("~1").catch((err: Error) => err);
-        expect(error.message).toContain(`: ${"x".repeat(200)}`);
+        expect(error.message).toBe("TheHive API error (400)");
         expect(error.message).not.toContain("x".repeat(201));
       });
 
-      it("should redact sensitive JSON fields in error detail", async () => {
+      it("should omit sensitive JSON error fields entirely", async () => {
         globalThis.fetch = vi.fn().mockResolvedValue({
           ok: false,
           status: 500,
@@ -1031,7 +1031,7 @@ describe("TheHiveClient", () => {
         });
 
         const error = await client.getCase("~1").catch((err: Error) => err);
-        expect(error.message).toContain("[REDACTED]");
+        expect(error.message).toBe("TheHive API internal server error");
         expect(error.message).not.toContain("leaked-secret");
       });
 
@@ -1092,19 +1092,34 @@ describe("TheHiveClient", () => {
         );
       });
 
-      it("should rethrow non-abort fetch errors unchanged", async () => {
+      it("should replace non-abort fetch errors with a fixed public error", async () => {
         const networkError = new TypeError("fetch failed");
         globalThis.fetch = vi.fn().mockRejectedValue(networkError);
 
-        await expect(client.getCase("~1")).rejects.toBe(networkError);
+        await expect(client.getCase("~1")).rejects.toThrow("TheHive API request failed");
       });
 
       it("should not map non-Error abort-like rejections to timeout errors", async () => {
         const abortLike = { name: "AbortError" };
         globalThis.fetch = vi.fn().mockRejectedValue(abortLike);
 
-        await expect(client.getCase("~1")).rejects.toEqual(abortLike);
+        await expect(client.getCase("~1")).rejects.toThrow("TheHive API request failed");
       });
     });
+  });
+});
+
+describe("SOC-3 client transport boundary", () => {
+  it("rejects plaintext remote URLs even when constructed without getConfig", () => {
+    expect(() => new TheHiveClient({ ...mockConfig, url: "http://thehive.example.com" })).toThrow("THEHIVE_ALLOW_INSECURE_HTTP");
+  });
+  it("does not follow redirects that could send credentials to plaintext or another origin", async () => {
+    const fetchSpy = vi.fn(async () => new Response(null, { status: 302, headers: { location: "http://other.example.com" } }));
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const client = new TheHiveClient(mockConfig);
+      await expect(client.getCase("~1")).rejects.toThrow("302");
+      expect(fetchSpy.mock.calls[0]?.[1]).toMatchObject({ redirect: "error" });
+    } finally { vi.unstubAllGlobals(); }
   });
 });

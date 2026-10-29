@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
 import { formatJson } from "./output.js";
 import { CREATE, DESTRUCTIVE, READ_ONLY, UPDATE } from "./annotations.js";
-import { destructiveToolDisabled, type ToolSafetyOptions } from "./safety.js";
+import { registerTool, type ToolSafetyOptions } from "./safety.js";
 
 const alertStatusSchema = z.enum(["New", "Updated", "Ignored", "Imported"]);
 
@@ -12,7 +12,7 @@ export function registerAlertTools(
   client: TheHiveClient,
   options: ToolSafetyOptions = {},
 ): void {
-  server.tool(
+  registerTool(server, options,
     "thehive_list_alerts",
     "List alerts from TheHive with optional filters",
     {
@@ -80,7 +80,7 @@ export function registerAlertTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_get_alert",
     "Get detailed information about a specific alert",
     {
@@ -112,7 +112,7 @@ export function registerAlertTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_create_alert",
     "Create a new alert in TheHive",
     {
@@ -198,7 +198,7 @@ export function registerAlertTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_update_alert",
     "Update an existing alert",
     {
@@ -253,7 +253,7 @@ export function registerAlertTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_promote_alert",
     "Promote an alert to a case. Creates a new case from the alert data.",
     {
@@ -261,9 +261,6 @@ export function registerAlertTools(
     },
     DESTRUCTIVE,
     async ({ alertId }) => {
-      if (!options.allowDestructiveTools) {
-        return destructiveToolDisabled("thehive_promote_alert");
-      }
       try {
         const promoted = await client.promoteAlert(alertId);
         return {
@@ -288,7 +285,7 @@ export function registerAlertTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_delete_alert",
     "Permanently delete an alert",
     {
@@ -296,9 +293,6 @@ export function registerAlertTools(
     },
     DESTRUCTIVE,
     async ({ alertId }) => {
-      if (!options.allowDestructiveTools) {
-        return destructiveToolDisabled("thehive_delete_alert");
-      }
       try {
         await client.deleteAlert(alertId);
         return {

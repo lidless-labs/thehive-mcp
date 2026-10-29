@@ -1,3 +1,4 @@
+import { registerTool, type ToolSafetyOptions } from "./safety.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
@@ -9,8 +10,9 @@ const taskStatusSchema = z.enum(["Waiting", "InProgress", "Completed", "Cancel"]
 export function registerTaskTools(
   server: McpServer,
   client: TheHiveClient,
+  options: ToolSafetyOptions = {},
 ): void {
-  server.tool(
+  registerTool(server, options,
     "thehive_list_tasks",
     "List tasks for a specific case",
     {
@@ -61,7 +63,7 @@ export function registerTaskTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_get_task",
     "Get detailed information about a specific task",
     {
@@ -93,7 +95,7 @@ export function registerTaskTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_create_task",
     "Create a new task in a case",
     {
@@ -161,7 +163,7 @@ export function registerTaskTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_update_task",
     "Update an existing task",
     {

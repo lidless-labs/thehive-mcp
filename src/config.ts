@@ -5,10 +5,18 @@ export interface TheHiveConfig {
   timeout: number;
   allowDestructiveTools: boolean;
   enableRawQuery: boolean;
+  allowInsecureHttp?: boolean;
 }
 
 const DEFAULT_TIMEOUT_SECONDS = 30;
 const MAX_TIMEOUT_SECONDS = 300;
+
+export function validateApiKey(apiKey: string): string {
+  if (typeof apiKey !== "string" || !apiKey.trim() || /[^\x20-\x7e]/.test(apiKey)) {
+    throw new Error("THEHIVE_API_KEY must be a nonempty ASCII header value");
+  }
+  return apiKey;
+}
 
 export function getConfig(): TheHiveConfig {
   const url = process.env.THEHIVE_URL?.trim();
@@ -21,7 +29,14 @@ export function getConfig(): TheHiveConfig {
     throw new Error("THEHIVE_API_KEY environment variable is required");
   }
 
-  const parsedUrl = parseTheHiveUrl(url);
+  validateApiKey(apiKey);
+
+  const allowInsecureHttp = parseBooleanEnv(
+    process.env.THEHIVE_ALLOW_INSECURE_HTTP,
+    "THEHIVE_ALLOW_INSECURE_HTTP",
+    false,
+  );
+  const parsedUrl = parseTheHiveUrl(url, allowInsecureHttp);
   const verifySsl = parseVerifySsl(process.env.THEHIVE_VERIFY_SSL);
   const timeout = parseTimeout(process.env.THEHIVE_TIMEOUT);
   const allowDestructiveTools = parseBooleanEnv(
@@ -42,10 +57,11 @@ export function getConfig(): TheHiveConfig {
     timeout,
     allowDestructiveTools,
     enableRawQuery,
+    allowInsecureHttp,
   };
 }
 
-function parseTheHiveUrl(rawUrl: string): string {
+export function parseTheHiveUrl(rawUrl: string, allowInsecureHttp = false): string {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
@@ -59,6 +75,12 @@ function parseTheHiveUrl(rawUrl: string): string {
 
   if (parsed.username || parsed.password) {
     throw new Error("THEHIVE_URL must not include credentials");
+  }
+
+  const loopback = parsed.hostname === "localhost" || parsed.hostname === "[::1]" ||
+    /^127\.\d+\.\d+\.\d+$/.test(parsed.hostname);
+  if (parsed.protocol === "http:" && !loopback && !allowInsecureHttp) {
+    throw new Error("Non-loopback THEHIVE_URL must use HTTPS. Set THEHIVE_ALLOW_INSECURE_HTTP=true only to explicitly permit plaintext API credentials.");
   }
 
   return parsed.toString().replace(/\/+$/, "");

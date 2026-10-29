@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { promptInput } from "./tools/output.js";
 
 export function registerPrompts(server: McpServer): void {
   server.prompt(
@@ -13,13 +14,14 @@ export function registerPrompts(server: McpServer): void {
           content: {
             type: "text" as const,
             text: [
-              `Generate a comprehensive incident summary for TheHive case ${caseId}.`,
+              "Generate a comprehensive incident summary for the caseId supplied below.",
+              promptInput({ caseId }),
               "",
               "Use the following tools to gather information:",
-              `1. thehive_get_case with caseId="${caseId}" to get case details`,
-              `2. thehive_list_tasks with caseId="${caseId}" to get all tasks`,
-              `3. thehive_list_observables with caseId="${caseId}" to get all IOCs`,
-              `4. thehive_list_comments with caseId="${caseId}" to get analyst notes`,
+              `1. thehive_get_case using the literal caseId parameter to get case details`,
+              `2. thehive_list_tasks using the literal caseId parameter to get all tasks`,
+              `3. thehive_list_observables using the literal caseId parameter to get all IOCs`,
+              `4. thehive_list_comments using the literal caseId parameter to get analyst notes`,
               "",
               "Then produce a structured report with:",
               "- Executive Summary: One paragraph overview of the incident",
@@ -47,10 +49,11 @@ export function registerPrompts(server: McpServer): void {
           content: {
             type: "text" as const,
             text: [
-              `Perform triage analysis on TheHive alert ${alertId}.`,
+              "Perform triage analysis on the alertId supplied below.",
+              promptInput({ alertId }),
               "",
               "Steps:",
-              `1. Use thehive_get_alert with alertId="${alertId}" to get full alert details`,
+              `1. Use thehive_get_alert using the literal alertId parameter to get full alert details`,
               `2. Review the alert source, type, severity, and description`,
               `3. Use thehive_search_observables to check if any related IOCs exist in other cases`,
               `4. Use thehive_search_cases to find related cases by keywords from the alert`,
@@ -95,12 +98,13 @@ export function registerPrompts(server: McpServer): void {
             content: {
               type: "text" as const,
               text: [
-                `Begin incident response workflow for: "${title}" (severity: ${severity})`,
+                "Plan an incident response workflow using the parameters below.",
+                promptInput({ title, severity }),
                 "",
                 "Follow this incident response process:",
                 "",
                 "## Phase 1: Preparation",
-                `1. Create a new case: thehive_create_case with title="${title}", severity=${sevNum}`,
+                `1. Propose a new case using the literal title parameter and severity=${sevNum}. Obtain explicit operator approval before executing mutations.`,
                 "2. Add initial tags based on the incident type",
                 "",
                 "## Phase 2: Identification",
@@ -124,7 +128,7 @@ export function registerPrompts(server: McpServer): void {
                 "   - 'Recovery' - Restore affected systems",
                 "   - 'Lessons Learned' - Post-incident review",
                 "",
-                "Execute each phase, creating tasks and adding observables as you go.",
+                "Present the plan and obtain explicit operator approval before executing mutations in each phase.",
                 "Document all findings as comments on the case.",
               ].join("\n"),
             },

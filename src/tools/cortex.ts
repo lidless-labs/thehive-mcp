@@ -7,7 +7,7 @@ import {
   DESTRUCTIVE,
   READ_ONLY,
 } from "./annotations.js";
-import { destructiveToolDisabled, type ToolSafetyOptions } from "./safety.js";
+import { registerTool, type ToolSafetyOptions } from "./safety.js";
 
 const entityTypeSchema = z
   .string()
@@ -21,7 +21,7 @@ export function registerCortexTools(
   client: TheHiveClient,
   options: ToolSafetyOptions = {},
 ): void {
-  server.tool(
+  registerTool(server, options,
     "thehive_list_analyzers",
     "List available Cortex analyzers that can be run on observables",
     {
@@ -56,7 +56,7 @@ export function registerCortexTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_get_observable_enrichment_options",
     "List Cortex analyzers that can enrich a specific observable",
     {
@@ -109,7 +109,7 @@ export function registerCortexTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_run_analyzer",
     "Run a Cortex analyzer on a specific observable. Returns the job ID for tracking.",
     {
@@ -149,7 +149,7 @@ export function registerCortexTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_run_analyzer_and_wait",
     "Run a Cortex analyzer on an observable and wait for a terminal job status",
     {
@@ -179,8 +179,9 @@ export function registerCortexTools(
     },
     CREATE_OPEN_WORLD,
     async ({ analyzerId, cortexId, observableId, maxAttempts, intervalMs }) => {
+      let started: Awaited<ReturnType<TheHiveClient["runAnalyzer"]>> | undefined;
       try {
-        const started = await client.runAnalyzer(analyzerId, cortexId, observableId);
+        started = await client.runAnalyzer(analyzerId, cortexId, observableId);
         const jobId = started._id;
         if (!jobId) {
           throw new Error("Analyzer job did not return a job ID");
@@ -201,6 +202,15 @@ export function registerCortexTools(
           ],
         };
       } catch (error) {
+        if (started) {
+          return {
+            isError: true,
+            content: [{ type: "text" as const, text: formatJson({
+              outcome: "uncertain", started,
+              note: "Analyzer submission succeeded but completion could not be verified. Do not resubmit. Inspect the existing job with thehive_get_job or thehive_wait_for_job.",
+            }) }],
+          };
+        }
         return {
           content: [
             {
@@ -214,7 +224,7 @@ export function registerCortexTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_get_job",
     "Get the status and results of a Cortex analyzer job",
     {
@@ -248,7 +258,7 @@ export function registerCortexTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_wait_for_job",
     "Poll a Cortex analyzer job until it reaches a terminal status",
     {
@@ -296,7 +306,7 @@ export function registerCortexTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_summarize_job_report",
     "Fetch a Cortex job and return a compact report summary",
     {
@@ -340,7 +350,7 @@ export function registerCortexTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_list_responders",
     "List Cortex responders available for a case, alert, task, or observable",
     {
@@ -368,7 +378,7 @@ export function registerCortexTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_run_responder",
     "Run a Cortex responder on a case, alert, task, or observable. Responders have real-world side effects. Requires THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true.",
     {
@@ -395,9 +405,6 @@ export function registerCortexTools(
     },
     { ...DESTRUCTIVE, openWorldHint: true },
     async ({ responderId, cortexId, objectType, objectId, parameters, tlp }) => {
-      if (!options.allowDestructiveTools) {
-        return destructiveToolDisabled("thehive_run_responder");
-      }
       try {
         const action = await client.runResponder({
           responderId,
@@ -424,7 +431,7 @@ export function registerCortexTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_list_actions",
     "List past Cortex responder actions run on a case, alert, task, or observable",
     {

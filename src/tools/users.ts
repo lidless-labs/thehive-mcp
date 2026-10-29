@@ -1,3 +1,4 @@
+import { registerTool, type ToolSafetyOptions } from "./safety.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
@@ -7,8 +8,9 @@ import { READ_ONLY } from "./annotations.js";
 export function registerUserTools(
   server: McpServer,
   client: TheHiveClient,
+  options: ToolSafetyOptions = {},
 ): void {
-  server.tool(
+  registerTool(server, options,
     "thehive_list_users",
     "List users in the TheHive organization",
     {
@@ -46,7 +48,7 @@ export function registerUserTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_get_current_user",
     "Get the currently authenticated user's profile",
     {},

@@ -3,14 +3,14 @@ import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
 import { formatJson } from "./output.js";
 import { READ_ONLY } from "./annotations.js";
-import { rawQueryDisabled, type ToolSafetyOptions } from "./safety.js";
+import { rawQueryDisabled, registerTool, type ToolSafetyOptions } from "./safety.js";
 
 export function registerQueryTools(
   server: McpServer,
   client: TheHiveClient,
   options: ToolSafetyOptions = {},
 ): void {
-  server.tool(
+  registerTool(server, options,
     "thehive_query",
     `Execute a raw TheHive Query API request. Use this for complex searches that other tools can't handle (date ranges, AND/OR logic, nested queries, counting, etc.).
 

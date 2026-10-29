@@ -300,9 +300,9 @@ describe("tool registration", () => {
     const mergeTool = toolSpy.mock.calls.find(
       (call: unknown[]) => call[0] === "thehive_merge_cases",
     );
-    const handler = mergeTool?.at(-1) as (args: { caseIds: string[] }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
+    const handler = mergeTool?.at(-1) as (args: { caseIds: string[]; dryRun: boolean; confirm: boolean }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
 
-    const result = await handler({ caseIds: ["~1", "~2"] });
+    const result = await handler({ dryRun: false, confirm: true, caseIds: ["~1", "~2"] });
 
     expect(result.isError).toBeUndefined();
     expect(mergeSpy).toHaveBeenCalledWith(["~1", "~2"]);
@@ -333,9 +333,9 @@ describe("tool registration", () => {
     const promoteTool = toolSpy.mock.calls.find(
       (call: unknown[]) => call[0] === "thehive_promote_alert",
     );
-    const handler = promoteTool?.at(-1) as (args: { alertId: string }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
+    const handler = promoteTool?.at(-1) as (args: { alertId: string; dryRun: boolean; confirm: boolean }) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>;
 
-    const result = await handler({ alertId: "~alert" });
+    const result = await handler({ dryRun: false, confirm: true, alertId: "~alert" });
 
     expect(result.isError).toBeUndefined();
     expect(promoteSpy).toHaveBeenCalledWith("~alert");
@@ -382,9 +382,9 @@ describe("tool registration", () => {
       });
 
       expect(casesSpy).toHaveBeenCalledWith("alert", "~a1", 5);
-      expect(JSON.parse(cases.content[0]?.text ?? "[]")[0].case._id).toBe("~c2");
+      expect(JSON.parse(cases.content[0]?.text ?? "[]").data[0].case._id).toBe("~c2");
       expect(alertsSpy).toHaveBeenCalledWith("case", "~c1", undefined);
-      expect(JSON.parse(alerts.content[0]?.text ?? "[]")[0].alert._id).toBe("~a2");
+      expect(JSON.parse(alerts.content[0]?.text ?? "[]").data[0].alert._id).toBe("~a2");
     });
 
     it("rejects an invalid entityType", () => {
@@ -419,12 +419,13 @@ describe("tool registration", () => {
   describe("thehive_update_observable", () => {
     type ToolResult = { isError?: boolean; content: Array<{ text: string }> };
     const getHandler = () => {
-      registerObservableTools(server, client);
+      registerObservableTools(server, client, { allowDestructiveTools: true });
       const call = toolSpy.mock.calls.find(
         (c: unknown[]) => c[0] === "thehive_update_observable",
       );
       expect(call).toBeDefined();
-      return call?.at(-1) as (args: Record<string, unknown>) => Promise<ToolResult>;
+      const handler = call?.at(-1) as (args: Record<string, unknown>) => Promise<ToolResult>;
+      return (args: Record<string, unknown>) => handler({ ...args, dryRun: false, confirm: true });
     };
 
     it("rejects an empty update before sending any request", async () => {
@@ -448,7 +449,7 @@ describe("tool registration", () => {
 
       expect(result.isError).toBeUndefined();
       expect(updateSpy).toHaveBeenCalledWith("~o1", { ioc: true });
-      expect(JSON.parse(result.content[0]?.text ?? "{}")._id).toBe("~o1");
+      expect(JSON.parse(result.content[0]?.text ?? "{}").data._id).toBe("~o1");
     });
 
     it("returns isError when the upstream call fails", async () => {
@@ -467,13 +468,14 @@ describe("tool registration", () => {
   describe("alert detail tools", () => {
     type ToolResult = { isError?: boolean; content: Array<{ text: string }> };
     const handlerOf = (name: string) => {
-      registerAlertDetailTools(server, client);
+      registerAlertDetailTools(server, client, { allowDestructiveTools: true });
       const call = toolSpy.mock.calls.find((c: unknown[]) => c[0] === name);
       expect(call, name).toBeDefined();
-      return call?.at(-1) as (args: Record<string, unknown>) => Promise<ToolResult>;
+      const handler = call?.at(-1) as (args: Record<string, unknown>) => Promise<ToolResult>;
+      return (args: Record<string, unknown>) => handler({ ...args, dryRun: false, confirm: true });
     };
     const schemaOf = (name: string) => {
-      registerAlertDetailTools(server, client);
+      registerAlertDetailTools(server, client, { allowDestructiveTools: true });
       const call = toolSpy.mock.calls.find((c: unknown[]) => c[0] === name);
       return z.object(call?.[2] as z.ZodRawShape);
     };
@@ -493,12 +495,12 @@ describe("tool registration", () => {
       const comments = await handlerOf("thehive_list_alert_comments")({ alertId: "~a1" });
 
       expect(obsSpy).toHaveBeenCalledWith("~a1", 10);
-      expect(JSON.parse(observables.content[0]?.text ?? "[]")[0]._id).toBe("~o1");
+      expect(JSON.parse(observables.content[0]?.text ?? "[]").data[0]._id).toBe("~o1");
       expect(commentSpy).toHaveBeenCalledWith("~a1", undefined);
-      expect(JSON.parse(comments.content[0]?.text ?? "[]")[0]._id).toBe("~m1");
+      expect(JSON.parse(comments.content[0]?.text ?? "[]").data[0]._id).toBe("~m1");
     });
 
-    it("creates an alert observable and comment without any gate", async () => {
+    it("creates an alert observable and comment after explicit approval", async () => {
       const obsSpy = vi
         .spyOn(client, "createAlertObservable")
         .mockResolvedValue({ _id: "~o2", dataType: "ip" } as never);
@@ -599,6 +601,7 @@ describe("tool registration", () => {
       registerCortexTools(server, client, { allowDestructiveTools: true });
 
       const result = await handlerOf("thehive_run_responder")({
+        dryRun: false, confirm: true,
         ...runArgs,
         cortexId: "cortex",
         parameters: { message: "notify" },
@@ -620,7 +623,7 @@ describe("tool registration", () => {
       );
       registerCortexTools(server, client, { allowDestructiveTools: true });
 
-      const result = await handlerOf("thehive_run_responder")(runArgs);
+      const result = await handlerOf("thehive_run_responder")({ ...runArgs, dryRun: false, confirm: true });
 
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain("Error running responder");
@@ -714,17 +717,19 @@ describe("tool registration", () => {
     registerCaseTools(server, client, { allowDestructiveTools: true });
 
     const assigned = await handlerOf("thehive_bulk_assign_cases")({
+      dryRun: false, confirm: true,
       caseIds: ["~1", "~2"],
       owner: "analyst@example.com",
     });
     const closed = await handlerOf("thehive_bulk_close_cases")({
+      dryRun: false, confirm: true,
       caseIds: ["~3"],
       status: "TruePositive",
       summary: "Confirmed",
     });
 
     expect(assigned.isError).toBe(false);
-    expect(JSON.parse(assigned.content[0]?.text ?? "{}").succeeded).toBe(2);
+    expect(JSON.parse(assigned.content[0]?.text ?? "{}").data.succeeded).toBe(2);
     expect(closed.isError).toBe(false);
     expect(updateSpy).toHaveBeenCalledWith("~1", { owner: "analyst@example.com" });
     expect(updateSpy).toHaveBeenCalledWith("~3", {

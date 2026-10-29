@@ -1,3 +1,4 @@
+import { registerTool, type ToolSafetyOptions } from "./safety.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
@@ -20,8 +21,9 @@ const observableDataTypeSchema = z.enum([
 export function registerObservableTools(
   server: McpServer,
   client: TheHiveClient,
+  options: ToolSafetyOptions = {},
 ): void {
-  server.tool(
+  registerTool(server, options,
     "thehive_list_observables",
     "List observables (IOCs) for a specific case",
     {
@@ -74,7 +76,7 @@ export function registerObservableTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_get_observable",
     "Get detailed information about a specific observable",
     {
@@ -106,7 +108,7 @@ export function registerObservableTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_create_observable",
     "Add a new observable (IOC) to a case",
     {
@@ -199,7 +201,7 @@ export function registerObservableTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_update_observable",
     "Update metadata of an existing observable (IOC flag, sighted, TLP/PAP, tags, message). At least one field is required.",
     {
@@ -277,7 +279,7 @@ export function registerObservableTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_create_observable_bulk",
     "Add multiple observables of the same type to a case in one request. More efficient than creating one at a time.",
     {
@@ -356,7 +358,7 @@ export function registerObservableTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_search_observables",
     "Search observables across all cases",
     {

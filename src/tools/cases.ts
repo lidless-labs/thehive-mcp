@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
 import { ADDITIVE_IDEMPOTENT, CREATE, DESTRUCTIVE, READ_ONLY, UPDATE } from "./annotations.js";
 import { formatJson, settleWithConcurrency } from "./output.js";
-import { destructiveToolDisabled, type ToolSafetyOptions } from "./safety.js";
+import { registerTool, type ToolSafetyOptions } from "./safety.js";
 
 const caseStatusSchema = z.enum([
   "New",
@@ -29,7 +29,7 @@ export function registerCaseTools(
   client: TheHiveClient,
   options: ToolSafetyOptions = {},
 ): void {
-  server.tool(
+  registerTool(server, options,
     "thehive_list_cases",
     "List cases from TheHive with optional filters",
     {
@@ -92,7 +92,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_get_case",
     "Get detailed information about a specific case",
     {
@@ -124,7 +124,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_create_case",
     "Create a new case in TheHive",
     {
@@ -211,7 +211,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_update_case",
     "Update an existing case",
     {
@@ -285,7 +285,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_search_cases",
     "Search cases by title keyword",
     {
@@ -324,7 +324,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_close_case",
     "Close/resolve a case. In TheHive 5, the status field is the resolution status directly.",
     {
@@ -370,7 +370,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_assign_case",
     "Assign a case to a TheHive user by username or login",
     {
@@ -403,7 +403,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_update_case_custom_fields",
     "Update custom fields on an existing case",
     {
@@ -436,7 +436,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_add_case_tags",
     "Add tags to a case without removing existing tags",
     {
@@ -471,7 +471,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_remove_case_tags",
     "Remove tags from a case while preserving other tags",
     {
@@ -507,7 +507,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_set_case_flag",
     "Set or clear the case flag",
     {
@@ -540,7 +540,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_bulk_assign_cases",
     "Assign multiple cases to a TheHive user. Requires THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true.",
     {
@@ -549,9 +549,6 @@ export function registerCaseTools(
     },
     UPDATE,
     async ({ caseIds, owner }) => {
-      if (!options.allowDestructiveTools) {
-        return destructiveToolDisabled("thehive_bulk_assign_cases");
-      }
       const results = await settleWithConcurrency(caseIds, async (caseId) =>
         client.updateCase(caseId, { owner }),
       );
@@ -568,7 +565,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_bulk_close_cases",
     "Close multiple cases with the same resolution status and summary. Requires THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true.",
     {
@@ -584,9 +581,6 @@ export function registerCaseTools(
     },
     UPDATE,
     async ({ caseIds, status, impactStatus, summary }) => {
-      if (!options.allowDestructiveTools) {
-        return destructiveToolDisabled("thehive_bulk_close_cases");
-      }
       const results = await settleWithConcurrency(caseIds, async (caseId) =>
         client.updateCase(caseId, {
           status,
@@ -607,7 +601,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_case_timeline_summary",
     "Summarize a case with related tasks, observables, and comments",
     {
@@ -684,7 +678,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_delete_case",
     "Permanently delete a case. Use force=true to delete even if the case has tasks/observables.",
     {
@@ -696,9 +690,6 @@ export function registerCaseTools(
     },
     DESTRUCTIVE,
     async ({ caseId, force }) => {
-      if (!options.allowDestructiveTools) {
-        return destructiveToolDisabled("thehive_delete_case");
-      }
       try {
         await client.deleteCase(caseId, force);
         return {
@@ -723,7 +714,7 @@ export function registerCaseTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_merge_cases",
     "Merge multiple cases into a single case. This is irreversible and data-destructive.",
     {
@@ -734,9 +725,6 @@ export function registerCaseTools(
     },
     DESTRUCTIVE,
     async ({ caseIds }) => {
-      if (!options.allowDestructiveTools) {
-        return destructiveToolDisabled("thehive_merge_cases");
-      }
       try {
         const merged = await client.mergeCases(caseIds);
         return {

@@ -1,3 +1,4 @@
+import { registerTool, type ToolSafetyOptions } from "./safety.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
@@ -7,8 +8,9 @@ import { CREATE, READ_ONLY } from "./annotations.js";
 export function registerTaskLogTools(
   server: McpServer,
   client: TheHiveClient,
+  options: ToolSafetyOptions = {},
 ): void {
-  server.tool(
+  registerTool(server, options,
     "thehive_list_task_logs",
     "List log entries for a specific task",
     {
@@ -47,7 +49,7 @@ export function registerTaskLogTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_create_task_log",
     "Add a log entry to a task",
     {

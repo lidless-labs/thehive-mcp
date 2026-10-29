@@ -1,3 +1,4 @@
+import { registerTool, type ToolSafetyOptions } from "./safety.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
@@ -7,8 +8,9 @@ import { READ_ONLY } from "./annotations.js";
 export function registerTemplateTools(
   server: McpServer,
   client: TheHiveClient,
+  options: ToolSafetyOptions = {},
 ): void {
-  server.tool(
+  registerTool(server, options,
     "thehive_list_case_templates",
     "List available case templates. Use these when creating cases to auto-populate fields and tasks.",
     {

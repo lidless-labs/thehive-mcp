@@ -8,7 +8,7 @@
 <h1 align="center">thehive-mcp</h1>
 
 <p align="center">
-  <strong>An MCP server that gives an AI client full read-write control of TheHive: cases, alerts, tasks, observables, and Cortex analyzers, over stdio with destructive actions gated off by default.</strong>
+  <strong>An MCP server that gives an AI client full read-write control of TheHive: cases, alerts, tasks, observables, and Cortex analyzers, over stdio with all mutations gated off by default.</strong>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@ thehive-mcp is a Model Context Protocol server for [TheHive](https://thehive-pro
 
 thehive-mcp is an MCP server for **TheHive** incident response and case management. It exposes 57 Model Context Protocol tools that map onto the full TheHive 5 API surface, so an MCP client (Claude Desktop, Claude Code, Codex CLI, OpenClaw, Hermes, or any other) can drive a security operations center: create and triage cases, manage alerts, add and search observables, run and poll Cortex analyzers, file task logs and comments, and orchestrate SOAR-style incident response workflows in plain language. It talks to your TheHive instance over its REST API and speaks MCP over stdio, so it slots into any agent that supports the protocol with no extra service to run.
 
-The differentiator is safety. Irreversible operations (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`, `thehive_run_responder`), the bulk case tools (`thehive_bulk_assign_cases`, `thehive_bulk_close_cases`), and the raw Query DSL tool are gated off by default and only become callable when you opt in with an environment variable. TLS relaxation is scoped to TheHive requests only, never the whole process. The server is tested against a live **TheHive 5.4.11** instance across read, write, and destructive workflows.
+All 28 mutating tools are disabled by default, including record creation, additive writes, state changes, bulk operations, and Cortex analyzer and responder submissions. Operator authority enables local previews. Execution requires `dryRun: false` and `confirm: true` for each approved call. The raw Query DSL has a separate default-off gate. TLS relaxation is scoped to TheHive requests only. The server is tested against TheHive 5.4.11.
 
 ## Quickstart
 
@@ -67,7 +67,7 @@ Drop this into any MCP client that reads the standard `mcpServers` map (Claude D
 }
 ```
 
-To enable the gated destructive tools and the raw Query DSL tool, add them to `env`:
+To enable mutation previews and the raw Query DSL tool, add the flags to `env`:
 
 ```json
 {
@@ -90,7 +90,7 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 
 ## Tools
 
-57 tools across cases, alerts, tasks, observables, Cortex, and more. The seven destructive tools and the raw query tool are gated behind environment flags as noted.
+57 tools across cases, alerts, tasks, observables, Cortex, and more. All 28 mutating tools require operator authority, default to preview, and require explicit confirmation for execution. The 29 read/query tools retain their existing behavior, including the separate raw query flag.
 
 ### Cases (16 tools)
 
@@ -99,10 +99,10 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 | `thehive_list_cases` | List cases with filters (status, severity, tags, owner) |
 | `thehive_get_case` | Get a specific case by ID |
 | `thehive_create_case` | Create a new case |
-| `thehive_update_case` | Update case fields (severity, status, tags, etc.) |
+| `thehive_update_case` | Update case fields. Requires operator approval |
 | `thehive_search_cases` | Search cases by title keyword |
-| `thehive_close_case` | Close a case with resolution status and summary |
-| `thehive_assign_case` | Assign a case to a user |
+| `thehive_close_case` | Close a case with resolution status and summary. Requires operator approval |
+| `thehive_assign_case` | Assign a case to a user. Requires operator approval |
 | `thehive_update_case_custom_fields` | Update case custom fields |
 | `thehive_add_case_tags` | Add tags without replacing existing tags |
 | `thehive_remove_case_tags` | Remove selected tags |
@@ -120,7 +120,7 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 | `thehive_list_alerts` | List alerts with filters (status, severity, source, type) |
 | `thehive_get_alert` | Get a specific alert by ID |
 | `thehive_create_alert` | Create a new alert |
-| `thehive_update_alert` | Update alert fields |
+| `thehive_update_alert` | Update alert fields. Requires operator approval |
 | `thehive_promote_alert` | Promote an alert to a case (creates a new case). Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
 | `thehive_delete_alert` | Permanently delete an alert. Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
 | `thehive_list_alert_observables` | List observables attached to an alert |
@@ -219,7 +219,8 @@ Set environment variables:
 | `THEHIVE_API_KEY` | Yes | - | API key for authentication |
 | `THEHIVE_VERIFY_SSL` | No | `true` | Set to `false` only for trusted lab systems with self-signed TLS. When disabled, TLS verification is relaxed only for TheHive requests (via a scoped dispatcher), not for the whole process |
 | `THEHIVE_TIMEOUT` | No | `30` | Request timeout in seconds (1-300) |
-| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Set to `true` to enable destructive/irreversible MCP tools (`thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases`, `thehive_promote_alert`, `thehive_run_responder`, `thehive_bulk_assign_cases`, `thehive_bulk_close_cases`) |
+| `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS` | No | `false` | Enable local previews for all 28 mutations, including additive writes and analyzer submissions. Execution also requires `dryRun: false` and `confirm: true` |
+| `THEHIVE_ALLOW_INSECURE_HTTP` | No | `false` | Explicitly permit plaintext HTTP API credentials outside loopback |
 | `THEHIVE_ENABLE_RAW_QUERY` | No | `false` | Set to `true` to enable the raw Query DSL MCP tool |
 
 ## Prompt Templates
@@ -321,7 +322,7 @@ If you run from a source checkout instead of the npm package, point `command`/`a
 - **Observable creation returns arrays.** The client handles this transparently. Bulk creation uses `data` as an array.
 - **Cortex connector endpoints** live under `/api/connector/` not `/api/v1/`.
 - **`description` is required** when creating cases and alerts.
-- **Destructive MCP tools are gated.** `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases` (irreversible), `thehive_promote_alert`, `thehive_run_responder`, `thehive_bulk_assign_cases`, and `thehive_bulk_close_cases` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`.
+- **Destructive MCP tools are gated.** `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases` (irreversible), `thehive_promote_alert`, `thehive_run_responder`, `thehive_bulk_assign_cases`, and `thehive_bulk_close_cases` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`. The same gate protects single-case close/assign, generic case state/ownership changes, case creation with an owner, and alert status changes. Calls preview locally until both `dryRun: false` and `confirm: true` are supplied.
 - **Tool output and upstream responses are bounded.** Every tool declares MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), tool text is capped at 100,000 characters, upstream response bodies are capped at 10 MB, and bulk tools issue at most 5 concurrent requests.
 - **Raw query is gated.** `thehive_query` requires `THEHIVE_ENABLE_RAW_QUERY=true`.
 - **SSL verification is scoped.** Setting `THEHIVE_VERIFY_SSL=false` relaxes TLS certificate validation only for requests to TheHive (via a per-client undici dispatcher) and never disables it process-wide. A warning is logged to stderr when enabled.
@@ -373,6 +374,10 @@ THEHIVE_URL=https://192.0.2.10:9000 THEHIVE_API_KEY=your-key npm run dev
 
 Bug reports and patches are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for what lands easily, [SECURITY.md](SECURITY.md) for reporting vulnerabilities, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Issue templates are under [.github/ISSUE_TEMPLATE](.github/ISSUE_TEMPLATE).
 
+### Container root access
+
+The installer creates no guest root password and locks password login after starting the container. Manage the guest from its Proxmox host with `pct enter`. Service API credentials continue to use protected stdin delivery and root-only storage.
+
 ## License
 
 [MIT](LICENSE)
@@ -385,3 +390,91 @@ Bug reports and patches are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for 
 
 <p align="center"><sub><a href="https://lidless.dev">All tools</a> &middot; <a href="https://github.com/lidless-labs">Lidless Labs on GitHub</a></sub></p>
 </content>
+
+### Operator approval for every mutation
+
+All 28 tools that create, update, delete, merge, promote, or submit jobs require
+`THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`. This includes tasks, observables, tags,
+custom fields, flags, comments, task logs, bulk operations, and Cortex analyzers
+and responders. Classification uses an explicit reviewed read inventory,
+independent of MCP annotations. Unknown tool names receive the mutation policy.
+
+After enabling the flag, mutating calls preview their tool, targets, and
+parameters locally by default. Preview sends no network requests and does not
+validate target existence or permissions. Review the plan with the operator.
+Execution requires **both** `dryRun: false` and `confirm: true` on that call.
+These controls are never forwarded to TheHive. Confirmation records the caller's
+assertion of approval. The server cannot authenticate a human decision.
+
+Confirmation does not supply idempotency. After an uncertain response, inspect
+upstream state before repeating a mutation. Analyzer polling failures return the
+started job as untrusted evidence with an uncertain outcome. Inspect that job
+with `thehive_get_job` or `thehive_wait_for_job` instead of resubmitting it.
+The server never automatically replays an analyzer submission.
+
+### Untrusted evidence in outputs
+
+Tool JSON and JSON resources now return `{ provenance, data }`. Consumers that
+previously read an object or array at the top level must read `data` instead.
+The server marks data from TheHive and Cortex as untrusted evidence. Instructions
+inside incident descriptions, comments, observable values, and analyzer reports
+must never authorize tool calls. Markup delimiters and Unicode line separators
+are escaped in serialized JSON, including object keys, and decode to their
+original values when parsed. Truncated outputs keep their provenance and remain
+valid JSON. Prompt arguments use an escaped input block, with operator approval
+required before mutations.
+
+### HTTPS and private certificate authorities
+
+Remote API URLs now require HTTPS by default. Migration: deployments that
+intentionally use plaintext beyond loopback must explicitly set
+`THEHIVE_ALLOW_INSECURE_HTTP=true`. This sends API credentials over plaintext.
+HTTP remains supported for literal IPv4 loopback addresses, IPv6 loopback, and
+`localhost`. Redirects are rejected for API and status requests, so an HTTPS
+endpoint cannot redirect a credential-bearing call elsewhere.
+
+For a private CA, keep `THEHIVE_VERIFY_SSL=true` and set
+`NODE_EXTRA_CA_CERTS=/path/to/ca-bundle.pem` before starting Node. Node loads the
+PEM bundle at process startup. This extends trust while keeping certificate and
+hostname verification enabled. The existing `THEHIVE_VERIFY_SSL=false` escape
+hatch still affects only this client's dispatcher and never disables TLS
+verification process-wide.
+
+### Installer service permissions
+
+New installer services run as the dedicated `thehive-mcp` system account. The
+application tree and credential file stay root-owned, with the credential file
+readable only by root. Systemd reads that file before dropping privileges.
+The service uses a read-only system view, a private temporary directory, no
+capabilities, and no privilege escalation. Systemd manages writable state,
+cache, and runtime directories under the service name. The sandbox keeps Node's
+JIT available. Existing installations must recreate the service unit and
+service account to adopt these settings.
+
+### Reviewed Proxmox installer inputs
+
+Before running the installer, review a local copy of the script and set these
+immutable inputs. There are no defaults:
+
+- `THEHIVE_SOURCE_COMMIT`: the full 40-character hexadecimal commit reviewed for
+  installation from `https://github.com/lidless-labs/thehive-mcp.git`.
+- `NODE_VERSION`: an exact Node 22 version at least `22.12.0`, without a `v` prefix.
+- `NODE_ARCH`: `x64` or `arm64`, matching the guest architecture.
+- `NODE_SHA256`: the 64-character SHA-256 of that version's
+  `node-v<VERSION>-linux-<ARCH>.tar.xz` archive.
+
+Obtain the archive checksum from the official release's signed
+`SHASUMS256.txt.asc`. Verify its signature with a separately trusted Node release
+keyring using the [official binary verification instructions](https://github.com/nodejs/node#verifying-binaries)
+before supplying the checksum. Do not copy a checksum from the same unverified
+download as the archive.
+
+The installer rejects missing or malformed pins before any host command or LXC
+creation. It downloads only from `https://nodejs.org/dist/v<VERSION>/`, checks the
+archive against the supplied checksum before extraction, then fetches the reviewed
+source commit from the canonical repository and checks its exact hash before
+`npm ci --ignore-scripts` or the build. Node is installed in `/usr/local`, including
+the service executable `/usr/local/bin/node`. Ubuntu template and apt prerequisites
+still follow their upstream repositories. This does not freeze the whole OS or
+provide a reproducible apt snapshot. An interrupted install leaves its guest for
+operator inspection. A retry refuses an existing container ID.
