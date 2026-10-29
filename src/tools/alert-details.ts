@@ -1,3 +1,4 @@
+import { registerTool, type ToolSafetyOptions } from "./safety.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
@@ -43,8 +44,9 @@ function errorResult(action: string, error: unknown) {
 export function registerAlertDetailTools(
   server: McpServer,
   client: TheHiveClient,
+  options: ToolSafetyOptions = {},
 ): void {
-  server.tool(
+  registerTool(server, options,
     "thehive_list_alert_observables",
     "List observables (IOCs) attached to an alert",
     {
@@ -67,7 +69,7 @@ export function registerAlertDetailTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_list_alert_comments",
     "List comments on an alert, newest first",
     {
@@ -90,7 +92,7 @@ export function registerAlertDetailTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_create_alert_observable",
     "Add an observable (IOC) to an alert without promoting it to a case",
     {
@@ -143,7 +145,7 @@ export function registerAlertDetailTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_create_alert_comment",
     "Add a comment to an alert",
     {

@@ -49,21 +49,21 @@ async function main(): Promise<void> {
   registerAlertTools(server, client, {
     allowDestructiveTools: config.allowDestructiveTools,
   });
-  registerSimilarTools(server, client);
-  registerAlertDetailTools(server, client);
-  registerTaskTools(server, client);
-  registerObservableTools(server, client);
-  registerTaskLogTools(server, client);
-  registerCommentTools(server, client);
-  registerUserTools(server, client);
+  registerSimilarTools(server, client, config);
+  registerAlertDetailTools(server, client, config);
+  registerTaskTools(server, client, config);
+  registerObservableTools(server, client, config);
+  registerTaskLogTools(server, client, config);
+  registerCommentTools(server, client, config);
+  registerUserTools(server, client, config);
   registerCortexTools(server, client, {
     allowDestructiveTools: config.allowDestructiveTools,
   });
-  registerStatusTools(server, client);
+  registerStatusTools(server, client, config);
   registerQueryTools(server, client, {
     enableRawQuery: config.enableRawQuery,
   });
-  registerTemplateTools(server, client);
+  registerTemplateTools(server, client, config);
   registerResources(server, client);
   registerPrompts(server);
 

@@ -1,3 +1,4 @@
+import { registerTool, type ToolSafetyOptions } from "./safety.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
@@ -21,8 +22,9 @@ const similarityInput = {
 export function registerSimilarTools(
   server: McpServer,
   client: TheHiveClient,
+  options: ToolSafetyOptions = {},
 ): void {
-  server.tool(
+  registerTool(server, options,
     "thehive_get_similar_cases",
     "List cases that share observables with a given alert or case (TheHive similarity matching)",
     similarityInput,
@@ -47,7 +49,7 @@ export function registerSimilarTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_get_similar_alerts",
     "List alerts that share observables with a given alert or case (TheHive similarity matching)",
     similarityInput,

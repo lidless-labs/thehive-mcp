@@ -1,3 +1,4 @@
+import { registerTool, type ToolSafetyOptions } from "./safety.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TheHiveClient } from "../client.js";
@@ -7,8 +8,9 @@ import { CREATE, READ_ONLY } from "./annotations.js";
 export function registerCommentTools(
   server: McpServer,
   client: TheHiveClient,
+  options: ToolSafetyOptions = {},
 ): void {
-  server.tool(
+  registerTool(server, options,
     "thehive_list_comments",
     "List comments on a specific case",
     {
@@ -47,7 +49,7 @@ export function registerCommentTools(
     },
   );
 
-  server.tool(
+  registerTool(server, options,
     "thehive_create_comment",
     "Add a comment to a case",
     {

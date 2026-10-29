@@ -419,12 +419,13 @@ describe("tool registration", () => {
   describe("thehive_update_observable", () => {
     type ToolResult = { isError?: boolean; content: Array<{ text: string }> };
     const getHandler = () => {
-      registerObservableTools(server, client);
+      registerObservableTools(server, client, { allowDestructiveTools: true });
       const call = toolSpy.mock.calls.find(
         (c: unknown[]) => c[0] === "thehive_update_observable",
       );
       expect(call).toBeDefined();
-      return call?.at(-1) as (args: Record<string, unknown>) => Promise<ToolResult>;
+      const handler = call?.at(-1) as (args: Record<string, unknown>) => Promise<ToolResult>;
+      return (args: Record<string, unknown>) => handler({ ...args, dryRun: false, confirm: true });
     };
 
     it("rejects an empty update before sending any request", async () => {
@@ -467,13 +468,14 @@ describe("tool registration", () => {
   describe("alert detail tools", () => {
     type ToolResult = { isError?: boolean; content: Array<{ text: string }> };
     const handlerOf = (name: string) => {
-      registerAlertDetailTools(server, client);
+      registerAlertDetailTools(server, client, { allowDestructiveTools: true });
       const call = toolSpy.mock.calls.find((c: unknown[]) => c[0] === name);
       expect(call, name).toBeDefined();
-      return call?.at(-1) as (args: Record<string, unknown>) => Promise<ToolResult>;
+      const handler = call?.at(-1) as (args: Record<string, unknown>) => Promise<ToolResult>;
+      return (args: Record<string, unknown>) => handler({ ...args, dryRun: false, confirm: true });
     };
     const schemaOf = (name: string) => {
-      registerAlertDetailTools(server, client);
+      registerAlertDetailTools(server, client, { allowDestructiveTools: true });
       const call = toolSpy.mock.calls.find((c: unknown[]) => c[0] === name);
       return z.object(call?.[2] as z.ZodRawShape);
     };
@@ -498,7 +500,7 @@ describe("tool registration", () => {
       expect(JSON.parse(comments.content[0]?.text ?? "[]").data[0]._id).toBe("~m1");
     });
 
-    it("creates an alert observable and comment without any gate", async () => {
+    it("creates an alert observable and comment after explicit approval", async () => {
       const obsSpy = vi
         .spyOn(client, "createAlertObservable")
         .mockResolvedValue({ _id: "~o2", dataType: "ip" } as never);
