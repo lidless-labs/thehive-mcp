@@ -15,8 +15,8 @@ describe("Proxmox installer", () => {
   });
 
   it("should write TheHive configuration without interpolating user input into a heredoc", () => {
-    expect(proxmoxInstaller).toContain("env THEHIVE_URL_VAL=");
-    expect(proxmoxInstaller).toContain('printf "THEHIVE_API_KEY=%s\\n"');
+    expect(proxmoxInstaller).not.toContain("env THEHIVE_URL_VAL=");
+    expect(proxmoxInstaller).toContain('printf \'THEHIVE_API_KEY=%s\\n\'');
     expect(proxmoxInstaller).not.toContain("ENVEOF");
   });
 });
@@ -41,14 +41,14 @@ describe("reviewed installer source", () => {
   it.each(["", "main", "v1.2.0", "a".repeat(39), "g".repeat(40), commit + ";exit 0", commit + "\n"])(
     "rejects unreviewed or invalid source ref %j before any host work", (ref) => {
       const result = spawnSync("bash", ["-e", "-c", validation], {
-        env: { PATH: process.env.PATH, THEHIVE_SOURCE_COMMIT: ref }, encoding: "utf8",
+        env: { PATH: process.env.PATH, HOME: process.env.HOME, NODE_VERSION: "22.23.4", NODE_ARCH: "x64", NODE_SHA256: "a".repeat(64), THEHIVE_SOURCE_COMMIT: ref }, encoding: "utf8",
       });
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain("reviewed 40-character hexadecimal commit");
     });
   it("accepts a full commit and validates before querying or creating containers", () => {
     const result = spawnSync("bash", ["-e", "-c", validation + '\nprintf "%s" "$THEHIVE_SOURCE_COMMIT"'], {
-      env: { PATH: process.env.PATH, THEHIVE_SOURCE_COMMIT: commit.toUpperCase() }, encoding: "utf8",
+      env: { PATH: process.env.PATH, HOME: process.env.HOME, NODE_VERSION: "22.23.4", NODE_ARCH: "x64", NODE_SHA256: "a".repeat(64), THEHIVE_SOURCE_COMMIT: commit.toUpperCase() }, encoding: "utf8",
     });
     expect(result.status).toBe(0);
     expect(result.stdout).toBe(commit);
@@ -73,7 +73,7 @@ describe("reviewed installer source", () => {
         pct() { while [[ "$1" != -- ]]; do shift; done; shift; "$@"; }
         export -f git npm cd pct
         ${checkout}
-      `], { env: { PATH: process.env.PATH, TRACE: trace, ACTUAL_COMMIT: actualCommit,
+      `], { env: { PATH: process.env.PATH, HOME: process.env.HOME, TRACE: trace, ACTUAL_COMMIT: actualCommit,
         THEHIVE_SOURCE_COMMIT: commit, CTID: "fixture", FAIL_FETCH: String(failFetch) }, encoding: "utf8" });
       let calls = "";
       try { calls = readFileSync(trace, "utf8"); } catch { /* no commands reached */ }
@@ -97,4 +97,20 @@ describe("reviewed installer source", () => {
     expect(result.calls).not.toContain("npm");
     if (failure === "hash mismatch") expect(result.stderr).toContain("Source commit verification failed");
   });
+});
+
+it("streams quoted service credentials without exposing them in command arguments", () => {
+  const setup = proxmoxInstaller.match(/# Configure service\n([\s\S]*?)# Dedicated service identity/)?.[1] ?? "";
+  const key = `key'"\\$HOME\`id\`$(echo injected)`;
+  const result = spawnSync("bash", ["-eu", "-c", `
+    pct() {
+      for arg in "$@"; do
+        case "$arg" in *"$THEHIVE_API_KEY_VAL"*) exit 91;; esac
+      done
+      cat
+    }
+    ${setup}
+  `], { env: { PATH: process.env.PATH, HOME: process.env.HOME, CTID: "fixture", THEHIVE_URL_VAL: "https://thehive.example.com", THEHIVE_API_KEY_VAL: key, MCP_PORT: "3104" }, encoding: "utf8" });
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toBe('THEHIVE_URL="https://thehive.example.com"\nTHEHIVE_API_KEY="key\'\\"\\\\$HOME`id`$(echo injected)"\nPORT="3104"\n');
 });
