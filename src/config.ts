@@ -11,6 +11,13 @@ export interface TheHiveConfig {
 const DEFAULT_TIMEOUT_SECONDS = 30;
 const MAX_TIMEOUT_SECONDS = 300;
 
+export function validateApiKey(apiKey: string): string {
+  if (typeof apiKey !== "string" || !apiKey.trim() || /[^\x20-\x7e]/.test(apiKey)) {
+    throw new Error("THEHIVE_API_KEY must be a nonempty ASCII header value");
+  }
+  return apiKey;
+}
+
 export function getConfig(): TheHiveConfig {
   const url = process.env.THEHIVE_URL?.trim();
   if (!url) {
@@ -21,6 +28,8 @@ export function getConfig(): TheHiveConfig {
   if (!apiKey) {
     throw new Error("THEHIVE_API_KEY environment variable is required");
   }
+
+  validateApiKey(apiKey);
 
   const allowInsecureHttp = parseBooleanEnv(
     process.env.THEHIVE_ALLOW_INSECURE_HTTP,

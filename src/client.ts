@@ -1,5 +1,5 @@
 import { Agent } from "undici";
-import { parseTheHiveUrl, type TheHiveConfig } from "./config.js";
+import { parseTheHiveUrl, validateApiKey, type TheHiveConfig } from "./config.js";
 import type {
   TheHiveCase,
   TheHiveAlert,
@@ -53,6 +53,8 @@ async function readBodyCapped(
   }
 }
 
+class SafeResponseError extends Error {}
+
 export class TheHiveClient {
   private readonly baseUrl: string;
   private readonly connectorBaseUrl: string;
@@ -67,9 +69,9 @@ export class TheHiveClient {
     this.baseUrl = `${url}/api/v1`;
     this.connectorBaseUrl = `${url}/api`;
     this.statusUrl = `${url}/api/status`;
-    this.apiKey = config.apiKey;
+    this.apiKey = validateApiKey(config.apiKey);
     this.headers = {
-      Authorization: `Bearer ${config.apiKey}`,
+      Authorization: `Bearer ${this.apiKey}`,
       "Content-Type": "application/json",
     };
     this.timeout = config.timeout;
@@ -122,7 +124,7 @@ export class TheHiveClient {
       if (!response.ok) {
         void response.body?.cancel().catch(() => undefined);
         const message = this.getErrorMessage(response.status);
-        throw new Error(message);
+        throw new SafeResponseError(message);
       }
 
       // Handle 204 No Content (e.g. PATCH updates in TheHive 5)
@@ -133,13 +135,13 @@ export class TheHiveClient {
       if (typeof response.text === "function") {
         const declaredLength = Number(response.headers?.get?.("content-length"));
         if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_CHARS) {
-          throw new Error(
+          throw new SafeResponseError(
             `TheHive API response too large (${declaredLength} bytes, limit ${MAX_RESPONSE_CHARS}); narrow the request`,
           );
         }
         const { text: body, truncated } = await readBodyCapped(response, MAX_RESPONSE_CHARS);
         if (truncated) {
-          throw new Error(
+          throw new SafeResponseError(
             `TheHive API response too large (more than ${MAX_RESPONSE_CHARS} characters); narrow the request`,
           );
         }
@@ -147,16 +149,17 @@ export class TheHiveClient {
           return {} as T;
         }
         try { return JSON.parse(body) as T; }
-        catch { throw new Error("TheHive API returned invalid JSON"); }
+        catch { throw new SafeResponseError("TheHive API returned invalid JSON"); }
       }
 
       try { return (await response.json()) as T; }
-      catch { throw new Error("TheHive API returned invalid JSON"); }
+      catch { throw new SafeResponseError("TheHive API returned invalid JSON"); }
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
-        throw new Error(`TheHive API timeout after ${this.timeout}ms`);
+        throw new SafeResponseError(`TheHive API timeout after ${this.timeout}ms`);
       }
-      throw error;
+      if (error instanceof SafeResponseError) throw error;
+      throw new Error("TheHive API request failed");
     } finally {
       clearTimeout(timeoutId);
     }

@@ -1092,18 +1092,18 @@ describe("TheHiveClient", () => {
         );
       });
 
-      it("should rethrow non-abort fetch errors unchanged", async () => {
+      it("should replace non-abort fetch errors with a fixed public error", async () => {
         const networkError = new TypeError("fetch failed");
         globalThis.fetch = vi.fn().mockRejectedValue(networkError);
 
-        await expect(client.getCase("~1")).rejects.toBe(networkError);
+        await expect(client.getCase("~1")).rejects.toThrow("TheHive API request failed");
       });
 
       it("should not map non-Error abort-like rejections to timeout errors", async () => {
         const abortLike = { name: "AbortError" };
         globalThis.fetch = vi.fn().mockRejectedValue(abortLike);
 
-        await expect(client.getCase("~1")).rejects.toEqual(abortLike);
+        await expect(client.getCase("~1")).rejects.toThrow("TheHive API request failed");
       });
     });
   });
