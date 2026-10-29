@@ -13,6 +13,14 @@ echo -e "${BLUE}  TheHive MCP - Proxmox LXC Installer${NC}"
 echo -e "${BLUE}================================================${NC}"
 echo ""
 
+# Reviewed source
+# The operator supplies the exact reviewed commit. Branches and tags are rejected.
+if [[ ! "${THEHIVE_SOURCE_COMMIT:-}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    printf '%s\n' 'Error: THEHIVE_SOURCE_COMMIT must be a reviewed 40-character hexadecimal commit.' >&2
+    exit 1
+fi
+THEHIVE_SOURCE_COMMIT=${THEHIVE_SOURCE_COMMIT,,}
+
 # Pre-flight
 if [ ! -f /etc/pve/.version ]; then
     echo -e "${RED}Error: Must be run on a Proxmox VE host.${NC}"; exit 1
@@ -93,9 +101,25 @@ pct exec "$CTID" -- bash -c "mkdir -p /etc/apt/keyrings && curl -fsSL https://de
 pct exec "$CTID" -- bash -c "echo 'deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main' > /etc/apt/sources.list.d/nodesource.list"
 pct exec "$CTID" -- bash -c "apt-get update && apt-get install -y nodejs"
 
-# Clone, configure, build
+# Fetch reviewed source
 echo -e "${YELLOW}Setting up TheHive MCP...${NC}"
-pct exec "$CTID" -- bash -c "git clone https://github.com/solomonneas/thehive-mcp.git /opt/thehive-mcp"
+pct exec "$CTID" -- env SOURCE_COMMIT="$THEHIVE_SOURCE_COMMIT" bash -ceu '
+git init /opt/thehive-mcp
+cd /opt/thehive-mcp
+git remote add origin https://github.com/lidless-labs/thehive-mcp.git
+git fetch --depth 1 origin "$SOURCE_COMMIT"
+git checkout --detach FETCH_HEAD
+ACTUAL_COMMIT=$(git rev-parse --verify HEAD^{commit})
+if [ "$ACTUAL_COMMIT" != "$SOURCE_COMMIT" ]; then
+    printf "%s\n" "Source commit verification failed. Stopping before dependency installation." >&2
+    exit 1
+fi
+npm ci
+npm run build
+npm prune --omit=dev
+'
+
+# Configure service
 pct exec "$CTID" -- env THEHIVE_URL_VAL="$THEHIVE_URL_VAL" THEHIVE_API_KEY_VAL="$THEHIVE_API_KEY_VAL" MCP_PORT="$MCP_PORT" bash -c '
 umask 077
 {
@@ -104,7 +128,6 @@ umask 077
   printf "PORT=%s\n" "$MCP_PORT"
 } > /opt/thehive-mcp/.env
 '
-pct exec "$CTID" -- bash -c "cd /opt/thehive-mcp && npm ci && npm run build && npm prune --omit=dev"
 
 # Dedicated service identity. The code and environment file remain root-owned.
 pct exec "$CTID" -- bash -c "id -u thehive-mcp >/dev/null 2>&1 || useradd --system --user-group --home-dir /var/lib/thehive-mcp --shell /usr/sbin/nologin thehive-mcp"

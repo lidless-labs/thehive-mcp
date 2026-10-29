@@ -446,3 +446,13 @@ capabilities, and no privilege escalation. Systemd manages writable state,
 cache, and runtime directories under the service name. The sandbox keeps Node's
 JIT available. Existing installations must recreate the service unit and
 service account to adopt these settings.
+
+### Reviewed Proxmox installer source
+
+Before running `scripts/proxmox_install.sh`, the operator must set
+`THEHIVE_SOURCE_COMMIT` to the full 40-character hexadecimal commit reviewed for
+installation. There is no default ref. The installer rejects missing values,
+branches, tags, and abbreviated hashes before querying or creating containers.
+It fetches that commit from `lidless-labs/thehive-mcp`, checks out detached HEAD,
+and verifies the actual commit before running `npm ci` or the build. Review the
+installer script itself before running it on a Proxmox host.
