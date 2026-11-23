@@ -137,9 +137,9 @@ export function registerAlertTools(
         .number()
         .int()
         .min(0)
-        .max(3)
+        .max(4)
         .optional()
-        .describe("TLP: 0=Clear, 1=Green, 2=Amber, 3=Red (default: 2)"),
+        .describe("TLP 2.0: 0=Clear, 1=Green, 2=Amber, 3=Amber+Strict, 4=Red (default: 2)"),
       pap: z
         .number()
         .int()
@@ -212,7 +212,7 @@ export function registerAlertTools(
         .max(4)
         .optional()
         .describe("New severity"),
-      tlp: z.number().int().min(0).max(3).optional().describe("New TLP level"),
+      tlp: z.number().int().min(0).max(4).optional().describe("TLP 2.0: 0=Clear, 1=Green, 2=Amber, 3=Amber+Strict, 4=Red"),
       pap: z.number().int().min(0).max(3).optional().describe("New PAP level"),
       tags: z
         .array(z.string())

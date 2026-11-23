@@ -15,7 +15,6 @@ import { registerCortexTools } from "../src/tools/cortex.js";
 import { registerStatusTools } from "../src/tools/status.js";
 import { registerQueryTools } from "../src/tools/query.js";
 import { registerTemplateTools } from "../src/tools/templates.js";
-import { MAX_OUTPUT_CHARS } from "../src/tools/output.js";
 
 const mockConfig = {
   url: "https://thehive.example.com",
@@ -354,6 +353,26 @@ describe("tool registration", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("THEHIVE_ENABLE_RAW_QUERY=true");
+  });
+
+  it.each([
+    ["thehive_create_case", registerCaseTools],
+    ["thehive_update_case", registerCaseTools],
+    ["thehive_create_alert", registerAlertTools],
+    ["thehive_update_alert", registerAlertTools],
+    ["thehive_create_observable", registerObservableTools],
+    ["thehive_create_observable_bulk", registerObservableTools],
+  ] as const)("registers TLP 2.0 for %s", (name, register) => {
+    register(server, client, { allowDestructiveTools: true });
+    const [, , shape] = toolSpy.mock.calls.find(([toolName]) => toolName === name)!;
+    for (const tlp of [0, 1, 2, 3, 4]) {
+      expect(shape.tlp.safeParse(tlp).success).toBe(true);
+    }
+    expect(shape.tlp.safeParse(5).success).toBe(false);
+    expect(shape.tlp.description).toContain("3=Amber+Strict, 4=Red");
+    expect(shape.tlp.parse(undefined)).toBeUndefined();
+    expect(shape.pap.safeParse(3).success).toBe(true);
+    expect(shape.pap.safeParse(4).success).toBe(false);
   });
 
   describe("similarity tools", () => {
@@ -798,7 +817,7 @@ describe("tool registration", () => {
     const result = await handlerOf("thehive_list_cases")({});
 
     const text = result.content[0]?.text ?? "";
-    expect(text.length).toBeLessThan(MAX_OUTPUT_CHARS + 500);
+    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(90_000);
     expect(text).toContain("output truncated");
   });
 });

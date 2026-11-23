@@ -7,9 +7,14 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 describe("entry point mutation policy", () => {
   it.each(["disabled", "preview", "unconfirmed"])("enforces %s for every advertised mutation", async (mode) => {
     const preload = "globalThis.fetch=async()=>{process.stderr.write('UNEXPECTED_FETCH\\n');throw new Error('offline test transport')};";
+    const packedBin = process.env.THEHIVE_TEST_PACKED_BIN;
     const transport = new StdioClientTransport({
       command: process.execPath,
-      args: ["--import", "tsx", "--import", `data:text/javascript,${encodeURIComponent(preload)}`, "src/index.ts"],
+      args: [
+        ...(packedBin ? [] : ["--import", "tsx"]),
+        "--import", `data:text/javascript,${encodeURIComponent(preload)}`,
+        packedBin ?? "src/index.ts",
+      ],
       env: {
         THEHIVE_URL: "https://thehive.example.com", THEHIVE_API_KEY: "fixture",
         THEHIVE_ALLOW_DESTRUCTIVE_TOOLS: mode === "disabled" ? "false" : "true",

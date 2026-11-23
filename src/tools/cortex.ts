@@ -1,6 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { TheHiveClient } from "../client.js";
+import {
+  CortexWaitDeadlineError,
+  TheHiveRequestTimeoutError,
+  withCortexWaitDeadline,
+  type TheHiveClient,
+} from "../client.js";
 import { formatJson } from "./output.js";
 import {
   CREATE_OPEN_WORLD,
@@ -151,7 +156,7 @@ export function registerCortexTools(
 
   registerTool(server, options,
     "thehive_run_analyzer_and_wait",
-    "Run a Cortex analyzer on an observable and wait for a terminal job status",
+    "Run a Cortex analyzer on an observable and wait up to 50 seconds for a terminal job status",
     {
       analyzerId: z
         .string()
@@ -179,14 +184,17 @@ export function registerCortexTools(
     },
     CREATE_OPEN_WORLD,
     async ({ analyzerId, cortexId, observableId, maxAttempts, intervalMs }) => {
-      let started: Awaited<ReturnType<TheHiveClient["runAnalyzer"]>> | undefined;
+      let jobId: string | undefined;
       try {
-        started = await client.runAnalyzer(analyzerId, cortexId, observableId);
-        const jobId = started._id;
-        if (!jobId) {
-          throw new Error("Analyzer job did not return a job ID");
-        }
-        const completed = await client.waitForJob(jobId, { maxAttempts, intervalMs });
+        const { started, completed } = await withCortexWaitDeadline(async (signal) => {
+          const started = await client.runAnalyzer(analyzerId, cortexId, observableId, signal);
+          if (!started._id) {
+            throw new Error("Analyzer job did not return a job ID. Do not resubmit before checking for an existing job.");
+          }
+          jobId = started._id;
+          const completed = await client.waitForJob(jobId, { maxAttempts, intervalMs, signal });
+          return { started, completed };
+        });
         return {
           content: [
             {
@@ -197,17 +205,26 @@ export function registerCortexTools(
                   completed,
                   summary: summarizeJob(completed),
                 },
-                              ),
+              ),
             },
           ],
         };
       } catch (error) {
-        if (started) {
+        if (jobId) {
           return {
             isError: true,
             content: [{ type: "text" as const, text: formatJson({
-              outcome: "uncertain", started,
+              outcome: "uncertain", started: { _id: jobId },
               note: "Analyzer submission succeeded but completion could not be verified. Do not resubmit. Inspect the existing job with thehive_get_job or thehive_wait_for_job.",
+            }) }],
+          };
+        }
+        if (error instanceof CortexWaitDeadlineError || error instanceof TheHiveRequestTimeoutError) {
+          return {
+            isError: true,
+            content: [{ type: "text" as const, text: formatJson({
+              outcome: "uncertain",
+              note: "The analyzer submission timed out before a job ID was received. Do not resubmit before checking for an existing job.",
             }) }],
           };
         }
@@ -260,7 +277,7 @@ export function registerCortexTools(
 
   registerTool(server, options,
     "thehive_wait_for_job",
-    "Poll a Cortex analyzer job until it reaches a terminal status",
+    "Wait up to 50 seconds for a Cortex analyzer job to reach a terminal status",
     {
       jobId: z
         .string()
@@ -293,6 +310,15 @@ export function registerCortexTools(
           ],
         };
       } catch (error) {
+        if (error instanceof CortexWaitDeadlineError) {
+          return {
+            isError: true,
+            content: [{ type: "text" as const, text: formatJson({
+              jobId,
+              note: "The Cortex wait deadline expired. Use thehive_get_job or thehive_wait_for_job to resume with this job ID.",
+            }) }],
+          };
+        }
         return {
           content: [
             {

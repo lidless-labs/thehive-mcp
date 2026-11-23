@@ -42,12 +42,12 @@ const mutations: [string, Record<string, unknown>][] = [
   ["thehive_run_analyzer_and_wait", { analyzerId: "fixture", cortexId: "fixture", observableId: "~1", maxAttempts: 1 }],
   ["thehive_run_responder", { objectType: "case", objectId: "~1", responderId: "~r" }],
 ];
-function setup(enabled = false) {
+function setup(enabled = false, timeout = config.timeout) {
   const server = new McpServer({ name: "security-test", version: "0" });
   const tools = new Map<string, any>();
   const schemas = new Map<string, any>();
   server.tool = vi.fn((...args: any[]) => { tools.set(args[0], args.at(-1)); schemas.set(args[0], z.object(args[2])); }) as any;
-  const client = new TheHiveClient(config);
+  const client = new TheHiveClient({ ...config, timeout });
   for (const register of registrations) register(server, client, { allowDestructiveTools: enabled });
   const fetchSpy = vi.fn(async () => new Response('{"_id":"~1","status":"Success","tags":[]}', { status: 200 }));
   vi.stubGlobal("fetch", fetchSpy);
@@ -198,4 +198,168 @@ it("reports an uncertain existing analyzer job after polling times out without r
   expect(parsed.data.started._id).toBe("untrusted-job-id");
   expect(parsed.data.note).toContain("Do not resubmit");
   expect(fetchSpy.mock.calls.filter(([, options]: any) => options.method === "POST")).toHaveLength(1);
+});
+
+it("preserves unrelated tags across overlapping case tag edits", async () => {
+  const { tools, fetchSpy } = setup(true);
+  let tags = ["keep", "remove"];
+  fetchSpy.mockImplementation(async (_url: string, options: RequestInit) => {
+    if (options.method === "PATCH") {
+      const delta = JSON.parse(options.body as string);
+      tags = delta.tags ?? [
+        ...new Set([...tags, ...(delta.addTags ?? [])]),
+      ].filter((tag) => !delta.removeTags?.includes(tag));
+      return new Response(null, { status: 204 });
+    }
+    return Response.json({ _id: "~1", tags });
+  });
+  const args = { caseId: "~1", dryRun: false, confirm: true };
+  const results = await Promise.all([
+    tools.get("thehive_add_case_tags")({ ...args, tags: ["add", "add"] }),
+    tools.get("thehive_remove_case_tags")({ ...args, tags: ["remove", "remove"] }),
+  ]);
+
+  expect(results.map((result) => JSON.parse(result.content[0].text).data.tags))
+    .toEqual([["keep", "add"], ["keep", "add"]]);
+  const calls = fetchSpy.mock.calls as unknown as [string, RequestInit][];
+  expect(calls.slice(0, 2).map(([url, { method, body }]) => [url, method, JSON.parse(body as string)]))
+    .toEqual([
+      [`${config.url}/api/v1/case/~1`, "PATCH", { addTags: ["add"] }],
+      [`${config.url}/api/v1/case/~1`, "PATCH", { removeTags: ["remove"] }],
+    ]);
+  expect(calls).toHaveLength(4);
+});
+
+it("reports a failed case tag patch and lets the next edit proceed", async () => {
+  const { tools, fetchSpy } = setup(true);
+  fetchSpy
+    .mockResolvedValueOnce(new Response(null, { status: 503 }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(Response.json({ _id: "~1", tags: ["keep"] }));
+  const args = { caseId: "~1", tags: ["remove"], dryRun: false, confirm: true };
+  const edit = tools.get("thehive_remove_case_tags");
+
+  const failed = await edit(args);
+  expect(failed.isError).toBe(true);
+  expect(failed.content[0].text).toContain("503");
+  const next = await edit(args);
+  expect(JSON.parse(next.content[0].text).data.tags).toEqual(["keep"]);
+  expect(fetchSpy).toHaveBeenCalledTimes(3);
+});
+
+describe("Cortex wait deadlines", () => {
+  afterEach(() => vi.useRealTimers());
+
+  const analyzerArgs = {
+    analyzerId: "fixture", cortexId: "fixture", observableId: "~1",
+    dryRun: false, confirm: true,
+  };
+
+  it("ends read-only polling when its 50-second budget expires during a sleep", async () => {
+    vi.useFakeTimers();
+    const { tools, fetchSpy } = setup(false, 120_000);
+    fetchSpy.mockImplementation(async () => Response.json({ _id: "~job", status: "InProgress" }));
+    let settled = false;
+    const result = tools.get("thehive_wait_for_job")({
+      jobId: "~job", intervalMs: 9_000, maxAttempts: 60,
+    }).finally(() => { settled = true; });
+
+    await vi.advanceTimersByTimeAsync(49_999);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(settled).toBe(true);
+    expect(await result).toMatchObject({ isError: true });
+    expect(JSON.parse((await result).content[0].text).data.jobId).toBe("~job");
+    expect(fetchSpy).toHaveBeenCalledTimes(6);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("counts submission and response-body time in one budget and retains the job ID", async () => {
+    vi.useFakeTimers();
+    const { tools, fetchSpy } = setup(true, 120_000);
+    fetchSpy
+      .mockImplementationOnce(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 35_000));
+        return Response.json({ _id: "~job", status: "InProgress", report: "x".repeat(100_000) });
+      })
+      .mockImplementationOnce(async (_url: string, { signal }: RequestInit) => {
+        const body = new ReadableStream({
+          start(controller) {
+            signal!.addEventListener("abort", () => controller.error(signal!.reason), { once: true });
+          },
+        });
+        return new Response(body);
+      });
+    let settled = false;
+    const result = tools.get("thehive_run_analyzer_and_wait")(analyzerArgs)
+      .finally(() => { settled = true; });
+
+    await vi.advanceTimersByTimeAsync(49_999);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(settled).toBe(true);
+    expect(await result).toMatchObject({ isError: true });
+    const { provenance, data } = JSON.parse((await result).content[0].text);
+    expect(provenance.trust).toBe("untrusted");
+    expect(data).toMatchObject({ outcome: "uncertain", started: { _id: "~job" } });
+    expect(data.note).toContain("Do not resubmit");
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("returns at the deadline even if an aborted submission settles later", async () => {
+    vi.useFakeTimers();
+    const { tools, fetchSpy } = setup(true, 120_000);
+    fetchSpy.mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 55_000));
+      return Response.json({ _id: "~job", status: "InProgress" });
+    });
+    let settled = false;
+    const result = tools.get("thehive_run_analyzer_and_wait")(analyzerArgs)
+      .finally(() => { settled = true; });
+
+    await vi.advanceTimersByTimeAsync(50_000);
+    expect(settled).toBe(true);
+    expect(await result).toMatchObject({ isError: true });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("aborts a stalled submission without polling or retrying it", async () => {
+    vi.useFakeTimers();
+    const { tools, fetchSpy } = setup(true, 120_000);
+    fetchSpy.mockImplementationOnce((_url: string, { signal }: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        signal!.addEventListener("abort", () => reject(signal!.reason), { once: true });
+      }));
+    let settled = false;
+    const result = tools.get("thehive_run_analyzer_and_wait")(analyzerArgs)
+      .finally(() => { settled = true; });
+
+    await vi.advanceTimersByTimeAsync(50_000);
+    expect(settled).toBe(true);
+    expect(await result).toMatchObject({ isError: true });
+    expect((await result).content[0].text).toContain("Do not resubmit");
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("reports uncertain submission when the request timeout expires first", async () => {
+    vi.useFakeTimers();
+    const { tools, fetchSpy } = setup(true, 30_000);
+    fetchSpy.mockImplementationOnce((_url: string, { signal }: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        signal!.addEventListener("abort", () => reject(signal!.reason), { once: true });
+      }));
+    const result = tools.get("thehive_run_analyzer_and_wait")(analyzerArgs);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    const reply = await result;
+    expect(reply.isError).toBe(true);
+    expect(JSON.parse(reply.content[0].text).data).toMatchObject({ outcome: "uncertain" });
+    expect(reply.content[0].text).toContain("Do not resubmit");
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });

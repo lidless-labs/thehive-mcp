@@ -1,5 +1,5 @@
 /** Upper bound on the text returned by any single tool call. */
-export const MAX_OUTPUT_CHARS = 100_000;
+export const MAX_OUTPUT_BYTES = 90_000;
 
 /** Upper bound on concurrent upstream requests issued by a single bulk tool call. */
 export const BULK_CONCURRENCY = 5;
@@ -22,28 +22,60 @@ function document(data: unknown): string {
 }
 
 /** Serialize upstream evidence with provenance and a bounded, parseable payload. */
-export function formatJson(value: unknown, maxChars: number = MAX_OUTPUT_CHARS): string {
-  return formatJsonDocument(value, maxChars);
+export function formatJson(value: unknown, maxBytes: number = MAX_OUTPUT_BYTES): string {
+  return formatJsonDocument(value, maxBytes);
 }
 
 /** Keep the trust boundary intact when truncating tool or resource data. */
-export function formatJsonDocument(value: unknown, maxChars: number = MAX_OUTPUT_CHARS): string {
+export function formatJsonDocument(value: unknown, maxBytes: number = MAX_OUTPUT_BYTES): string {
+  const limit = Math.min(maxBytes, MAX_OUTPUT_BYTES);
+  if (Array.isArray(value)) return formatArray(value, limit);
+
   const text = document(value);
-  if (text.length <= maxChars) return text;
-  if (!Array.isArray(value)) {
-    return document({ truncated: true, characters: text.length, note: "output truncated: Value exceeds the output limit." });
-  }
-  const envelope = (count: number) => document({
-    truncated: true, note: "output truncated", total: value.length, returned: count, items: value.slice(0, count),
+  if (Buffer.byteLength(text) <= limit) return text;
+  return document({ truncated: true, characters: text.length, note: "output truncated: Value exceeds the output limit." });
+}
+
+function formatArray(items: unknown[], limit: number): string {
+  const full = document([]);
+  const envelope = (returned: number) => document({
+    truncated: true, note: "output truncated", total: items.length, returned, items: [],
   });
-  let low = 0;
-  let high = value.length;
-  while (low < high) {
-    const mid = Math.ceil((low + high) / 2);
-    if (envelope(mid).length <= maxChars) low = mid;
-    else high = mid - 1;
+
+  const serialized: string[] = [];
+  let fullBytes = Buffer.byteLength(full);
+  let truncatedBytes = Buffer.byteLength(envelope(0));
+  let returned = 0;
+
+  for (let index = 0; index < items.length; index++) {
+    const json = JSON.stringify(items[index], null, 2) ?? "null";
+    if (Buffer.byteLength(json) > limit - fullBytes) break;
+    const escaped = escapeJson(json);
+    const lines = escaped.split("\n").length;
+    const bytes = Buffer.byteLength(escaped);
+
+    // Replacing [] adds the first newline and the closing bracket's indentation.
+    // Further items only add a comma and newline between elements.
+    fullBytes += bytes + 4 * lines + (index === 0 ? 4 : 2);
+    if (fullBytes > limit) break;
+    serialized.push(escaped);
+
+    truncatedBytes += bytes + 6 * lines + (index === 0 ? 6 : 2);
+    const count = index + 1;
+    if (truncatedBytes + String(count).length - 1 <= limit) returned = count;
   }
-  return envelope(low);
+
+  // Tiny custom limits can be smaller than even the empty provenance envelope.
+  if (serialized.length === items.length && fullBytes <= limit) {
+    return full.replace("[]", () => renderItems(serialized, "    ", "  "));
+  }
+  return envelope(returned).replace('"items": []', () =>
+    `"items": ${renderItems(serialized.slice(0, returned), "      ", "    ")}`);
+}
+
+function renderItems(items: string[], indent: string, closingIndent: string): string {
+  if (items.length === 0) return "[]";
+  return `[\n${items.map((item) => item.replace(/^/gm, indent)).join(",\n")}\n${closingIndent}]`;
 }
 
 /** Delimited prompt parameters are data, never additional instructions. */
@@ -57,12 +89,21 @@ export function promptInput(value: Record<string, unknown>): string {
   ].join("\n");
 }
 
-/** Cap free-form text (such as an error message) at a fixed length. */
-export function truncateText(text: string, maxChars: number = MAX_OUTPUT_CHARS): string {
-  if (text.length <= maxChars) {
-    return text;
+/** Cap free-form text in UTF-8 bytes without splitting a Unicode code point. */
+export function truncateText(text: string, maxBytes: number = MAX_OUTPUT_BYTES): string {
+  const limit = Math.max(0, Math.min(maxBytes, MAX_OUTPUT_BYTES));
+  if (Buffer.byteLength(text) <= limit) return text;
+
+  const marker = "... [truncated]".slice(0, limit);
+  const prefixLimit = limit - marker.length;
+  let bytes = 0;
+  let end = 0;
+  for (const char of text) {
+    bytes += Buffer.byteLength(char);
+    if (bytes > prefixLimit) break;
+    end += char.length;
   }
-  return `${text.slice(0, maxChars)}... [truncated]`;
+  return text.slice(0, end) + marker;
 }
 
 /**

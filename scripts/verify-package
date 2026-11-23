@@ -1,0 +1,13 @@
+#!/bin/bash
+# Smoke-test the shipped server over stdio with upstream fetch disabled.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# Extract beneath node_modules so the packed server resolves the CI-installed dependencies.
+pack_dir=$(mktemp -d "$PWD/node_modules/.thehive-package.XXXXXX")
+trap 'rm -rf "$pack_dir"' EXIT
+archive=$(npm pack --ignore-scripts --silent --pack-destination "$pack_dir")
+tar -xzf "$pack_dir/$archive" -C "$pack_dir"
+bin=$(node -p 'require(process.argv[1]).bin["thehive-mcp"]' "$pack_dir/package/package.json")
+test -x "$pack_dir/package/$bin"
+THEHIVE_TEST_PACKED_BIN="$pack_dir/package/$bin" npm test -- tests/entry-policy.test.ts

@@ -5,7 +5,12 @@
 ### Changed
 - `thehive_bulk_assign_cases` and `thehive_bulk_close_cases` now require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`, matching the other tools that change many records at once.
 - Bulk case tools issue at most 5 concurrent upstream requests.
-- Tool text output is capped at 100,000 characters and upstream response bodies at 10 MB, with a clear message when a cap applies.
+- JSON tool output uses a 90,000 UTF-8 byte budget and stays parseable when truncated. Oversized arrays are truncated without formatting the full array. The upstream response body limit remains 10 MB.
+- Cortex wait tools use a 50-second deadline and return the job ID when available so polling can resume.
+
+### Fixed
+- Case, alert, and observable tools accept TLP 2.0 Red (`4`).
+- Case tag additions and removals send tag deltas to TheHive so overlapping edits to different tags preserve both changes.
 
 ### Added
 - Every tool declares MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).

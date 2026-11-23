@@ -55,6 +55,38 @@ async function readBodyCapped(
 
 class SafeResponseError extends Error {}
 
+export class TheHiveRequestTimeoutError extends SafeResponseError {
+  constructor(timeoutMs: number) {
+    super(`TheHive API timeout after ${timeoutMs}ms`);
+  }
+}
+
+const CORTEX_WAIT_MS = 50_000;
+
+export class CortexWaitDeadlineError extends Error {
+  constructor() {
+    super("Cortex wait exceeded its 50-second deadline");
+  }
+}
+
+/** Use one deadline signal for submission, response reads, and polling delays. */
+export async function withCortexWaitDeadline<T>(run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expiry = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      const error = new CortexWaitDeadlineError();
+      controller.abort(error);
+      reject(error);
+    }, CORTEX_WAIT_MS);
+  });
+  try {
+    return await Promise.race([run(controller.signal), expiry]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export class TheHiveClient {
   private readonly baseUrl: string;
   private readonly connectorBaseUrl: string;
@@ -105,6 +137,13 @@ export class TheHiveClient {
   ): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    const externalSignal = options.signal;
+    const forwardAbort = () => {
+      clearTimeout(timeoutId);
+      controller.abort(externalSignal?.reason);
+    };
+    if (externalSignal?.aborted) forwardAbort();
+    else externalSignal?.addEventListener("abort", forwardAbort, { once: true });
     const headers = authenticated
       ? {
           ...this.headers,
@@ -113,6 +152,7 @@ export class TheHiveClient {
       : options.headers;
 
     try {
+      externalSignal?.throwIfAborted();
       const response = await fetch(url, {
         ...options,
         headers,
@@ -121,6 +161,7 @@ export class TheHiveClient {
         ...(this.dispatcher && { dispatcher: this.dispatcher }),
       });
 
+      externalSignal?.throwIfAborted();
       if (!response.ok) {
         void response.body?.cancel().catch(() => undefined);
         const message = this.getErrorMessage(response.status);
@@ -156,12 +197,13 @@ export class TheHiveClient {
       catch { throw new SafeResponseError("TheHive API returned invalid JSON"); }
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
-        throw new SafeResponseError(`TheHive API timeout after ${this.timeout}ms`);
+        throw new TheHiveRequestTimeoutError(this.timeout);
       }
       if (error instanceof SafeResponseError) throw error;
       throw new Error("TheHive API request failed");
     } finally {
       clearTimeout(timeoutId);
+      externalSignal?.removeEventListener("abort", forwardAbort);
     }
   }
 
@@ -281,6 +323,8 @@ export class TheHiveClient {
       tlp?: number;
       pap?: number;
       tags?: string[];
+      addTags?: string[];
+      removeTags?: string[];
       status?: string;
       summary?: string;
       owner?: string;
@@ -906,11 +950,13 @@ export class TheHiveClient {
     analyzerId: string,
     cortexId: string,
     observableId: string,
+    signal?: AbortSignal,
   ): Promise<TheHiveJob> {
     return this.connectorRequest<TheHiveJob>(
       `/connector/cortex/job`,
       {
         method: "POST",
+        signal,
         body: JSON.stringify({
           analyzerId,
           cortexId,
@@ -955,31 +1001,35 @@ export class TheHiveClient {
     );
   }
 
-  async getJob(jobId: string): Promise<TheHiveJob> {
+  async getJob(jobId: string, signal?: AbortSignal): Promise<TheHiveJob> {
     return this.connectorRequest<TheHiveJob>(
       `/connector/cortex/job/${encodeURIComponent(jobId)}`,
+      { signal },
     );
   }
 
   async waitForJob(
     jobId: string,
-    options: { maxAttempts?: number; intervalMs?: number } = {},
+    options: { maxAttempts?: number; intervalMs?: number; signal?: AbortSignal } = {},
   ): Promise<TheHiveJob> {
     const maxAttempts = Math.min(Math.max(options.maxAttempts ?? 20, 1), 60);
     const intervalMs = Math.min(Math.max(options.intervalMs ?? 2000, 100), 10000);
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const job = await this.getJob(jobId);
-      if (isTerminalJobStatus(job.status)) {
-        return job;
+    const poll = async (signal: AbortSignal) => {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const job = await this.getJob(jobId, signal);
+        if (isTerminalJobStatus(job.status)) {
+          return job;
+        }
+
+        if (attempt < maxAttempts) {
+          await sleep(intervalMs, signal);
+        }
       }
 
-      if (attempt < maxAttempts) {
-        await sleep(intervalMs);
-      }
-    }
-
-    throw new Error("Cortex job did not complete before the polling limit");
+      throw new Error("Cortex job did not complete before the polling limit");
+    };
+    return options.signal ? poll(options.signal) : withCortexWaitDeadline(poll);
   }
 
   // --- Status ---
@@ -1047,6 +1097,17 @@ function isTerminalJobStatus(status: string | undefined): boolean {
   return ["success", "failure", "error", "deleted"].includes(status.toLowerCase());
 }
 
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", abort);
+      resolve();
+    }, ms);
+    function abort() {
+      clearTimeout(timer);
+      reject(signal.reason);
+    }
+    signal.addEventListener("abort", abort, { once: true });
+  });
 }
