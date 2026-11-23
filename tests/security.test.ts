@@ -199,3 +199,50 @@ it("reports an uncertain existing analyzer job after polling times out without r
   expect(parsed.data.note).toContain("Do not resubmit");
   expect(fetchSpy.mock.calls.filter(([, options]: any) => options.method === "POST")).toHaveLength(1);
 });
+
+it("preserves unrelated tags across overlapping case tag edits", async () => {
+  const { tools, fetchSpy } = setup(true);
+  let tags = ["keep", "remove"];
+  fetchSpy.mockImplementation(async (_url: string, options: RequestInit) => {
+    if (options.method === "PATCH") {
+      const delta = JSON.parse(options.body as string);
+      tags = delta.tags ?? [
+        ...new Set([...tags, ...(delta.addTags ?? [])]),
+      ].filter((tag) => !delta.removeTags?.includes(tag));
+      return new Response(null, { status: 204 });
+    }
+    return Response.json({ _id: "~1", tags });
+  });
+  const args = { caseId: "~1", dryRun: false, confirm: true };
+  const results = await Promise.all([
+    tools.get("thehive_add_case_tags")({ ...args, tags: ["add", "add"] }),
+    tools.get("thehive_remove_case_tags")({ ...args, tags: ["remove", "remove"] }),
+  ]);
+
+  expect(results.map((result) => JSON.parse(result.content[0].text).data.tags))
+    .toEqual([["keep", "add"], ["keep", "add"]]);
+  const calls = fetchSpy.mock.calls as unknown as [string, RequestInit][];
+  expect(calls.slice(0, 2).map(([url, { method, body }]) => [url, method, JSON.parse(body as string)]))
+    .toEqual([
+      [`${config.url}/api/v1/case/~1`, "PATCH", { addTags: ["add"] }],
+      [`${config.url}/api/v1/case/~1`, "PATCH", { removeTags: ["remove"] }],
+    ]);
+  expect(calls).toHaveLength(4);
+});
+
+it("reports a failed case tag patch and lets the next edit proceed", async () => {
+  const { tools, fetchSpy } = setup(true);
+  fetchSpy
+    .mockResolvedValueOnce(new Response(null, { status: 503 }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(Response.json({ _id: "~1", tags: ["keep"] }));
+  const args = { caseId: "~1", tags: ["remove"], dryRun: false, confirm: true };
+  const edit = tools.get("thehive_remove_case_tags");
+
+  const failed = await edit(args);
+  expect(failed.isError).toBe(true);
+  expect(failed.content[0].text).toContain("503");
+  const next = await edit(args);
+  expect(JSON.parse(next.content[0].text).data.tags).toEqual(["keep"]);
+  expect(fetchSpy).toHaveBeenCalledTimes(3);
+});

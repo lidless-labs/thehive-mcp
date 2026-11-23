@@ -281,6 +281,8 @@ export class TheHiveClient {
       tlp?: number;
       pap?: number;
       tags?: string[];
+      addTags?: string[];
+      removeTags?: string[];
       status?: string;
       summary?: string;
       owner?: string;

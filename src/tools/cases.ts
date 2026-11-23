@@ -446,9 +446,7 @@ export function registerCaseTools(
     ADDITIVE_IDEMPOTENT,
     async ({ caseId, tags }) => {
       try {
-        const theCase = await client.getCase(caseId);
-        const mergedTags = Array.from(new Set([...(theCase.tags ?? []), ...tags]));
-        const updated = await client.updateCase(caseId, { tags: mergedTags });
+        const updated = await client.updateCase(caseId, { addTags: [...new Set(tags)] });
         return {
           content: [
             {
@@ -481,10 +479,7 @@ export function registerCaseTools(
     UPDATE,
     async ({ caseId, tags }) => {
       try {
-        const theCase = await client.getCase(caseId);
-        const removeSet = new Set(tags);
-        const remainingTags = (theCase.tags ?? []).filter((tag) => !removeSet.has(tag));
-        const updated = await client.updateCase(caseId, { tags: remainingTags });
+        const updated = await client.updateCase(caseId, { removeTags: [...new Set(tags)] });
         return {
           content: [
             {
