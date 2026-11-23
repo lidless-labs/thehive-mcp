@@ -32,10 +32,13 @@ All 28 mutating tools are disabled by default, including record creation, additi
 
 ## Quickstart
 
-Run it straight from npm, no global install needed:
+Build the MCP server from this repository to use the tools and mutation controls described here. The published `thehive-mcp@1.2.3` comes from an earlier CLI release line and does not provide the mutation preview or confirmation controls on `main`.
 
 ```bash
-npx -y thehive-mcp
+git clone https://github.com/lidless-labs/thehive-mcp.git
+cd thehive-mcp
+npm ci
+npm run build
 ```
 
 Point it at your TheHive instance with two environment variables:
@@ -43,7 +46,7 @@ Point it at your TheHive instance with two environment variables:
 ```bash
 THEHIVE_URL=https://192.0.2.10:9000 \
 THEHIVE_API_KEY=your-api-key \
-npx -y thehive-mcp
+node dist/index.js
 ```
 
 The server speaks MCP over stdio, so it is meant to be launched by an MCP client rather than run by hand. The client config below is the normal entry point.
@@ -56,8 +59,8 @@ Drop this into any MCP client that reads the standard `mcpServers` map (Claude D
 {
   "mcpServers": {
     "thehive": {
-      "command": "npx",
-      "args": ["-y", "thehive-mcp"],
+      "command": "node",
+      "args": ["/absolute/path/to/thehive-mcp/dist/index.js"],
       "env": {
         "THEHIVE_URL": "https://192.0.2.10:9000",
         "THEHIVE_API_KEY": "your-api-key"
@@ -73,8 +76,8 @@ To enable mutation previews and the raw Query DSL tool, add the flags to `env`:
 {
   "mcpServers": {
     "thehive": {
-      "command": "npx",
-      "args": ["-y", "thehive-mcp"],
+      "command": "node",
+      "args": ["/absolute/path/to/thehive-mcp/dist/index.js"],
       "env": {
         "THEHIVE_URL": "https://192.0.2.10:9000",
         "THEHIVE_API_KEY": "your-api-key",
@@ -241,7 +244,7 @@ Set environment variables:
 
 ## Client setup
 
-The [MCP client config](#mcp-client-config) above works for any client that reads the standard `mcpServers` map. The notes below cover clients with their own setup command and the source-checkout variant for each.
+The [MCP client config](#mcp-client-config) above works for clients that read the standard `mcpServers` map. Replace the example path with the absolute path to your built server.
 
 ### Claude Code
 
@@ -249,7 +252,7 @@ The [MCP client config](#mcp-client-config) above works for any client that read
 claude mcp add thehive \
   --env THEHIVE_URL=https://192.0.2.10:9000 \
   --env THEHIVE_API_KEY=your-api-key \
-  -- npx -y thehive-mcp
+  -- node /absolute/path/to/thehive-mcp/dist/index.js
 ```
 
 Add `--scope user` to make it available from any directory instead of only the current project.
@@ -262,7 +265,7 @@ Add `--scope user` to make it available from any directory instead of only the c
 codex mcp add thehive \
   --env THEHIVE_URL=https://192.0.2.10:9000 \
   --env THEHIVE_API_KEY=your-api-key \
-  -- npx -y thehive-mcp
+  -- node /absolute/path/to/thehive-mcp/dist/index.js
 ```
 
 Codex writes the entry to `~/.codex/config.toml` under `[mcp_servers.thehive]`. Verify with `codex mcp list`.
@@ -271,8 +274,8 @@ Codex writes the entry to `~/.codex/config.toml` under `[mcp_servers.thehive]`. 
 
 ```bash
 openclaw mcp set thehive '{
-  "command": "npx",
-  "args": ["-y", "thehive-mcp"],
+  "command": "node",
+  "args": ["/absolute/path/to/thehive-mcp/dist/index.js"],
   "env": {
     "THEHIVE_URL": "https://192.0.2.10:9000",
     "THEHIVE_API_KEY": "your-api-key"
@@ -294,25 +297,14 @@ openclaw mcp list
 ```yaml
 mcp_servers:
   thehive:
-    command: "npx"
-    args: ["-y", "thehive-mcp"]
+    command: "node"
+    args: ["/absolute/path/to/thehive-mcp/dist/index.js"]
     env:
       THEHIVE_URL: "https://192.0.2.10:9000"
       THEHIVE_API_KEY: "your-api-key"
 ```
 
 Then reload MCP from inside a Hermes session with `/reload-mcp`.
-
-### Source checkout
-
-If you run from a source checkout instead of the npm package, point `command`/`args` at the built `dist/index.js`:
-
-```json
-{
-  "command": "node",
-  "args": ["/absolute/path/to/thehive-mcp/dist/index.js"]
-}
-```
 
 ## TheHive 5 notes
 
