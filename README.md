@@ -179,9 +179,9 @@ For Claude Desktop, the config file lives at `~/Library/Application Support/Clau
 | `thehive_list_analyzers` | List available Cortex analyzers |
 | `thehive_get_observable_enrichment_options` | List analyzers that can enrich an observable |
 | `thehive_run_analyzer` | Run a Cortex analyzer on an observable |
-| `thehive_run_analyzer_and_wait` | Run an analyzer and wait for completion |
+| `thehive_run_analyzer_and_wait` | Submit an analyzer and wait for completion within a shared 50-second budget |
 | `thehive_get_job` | Get analyzer job status and results |
-| `thehive_wait_for_job` | Poll a job until it reaches a terminal status |
+| `thehive_wait_for_job` | Poll a job for up to 50 seconds |
 | `thehive_summarize_job_report` | Return a compact analyzer report summary |
 | `thehive_list_responders` | List Cortex responders available for a case, alert, task, or observable |
 | `thehive_run_responder` | Run a Cortex responder on an entity. Requires `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true` |
@@ -315,7 +315,8 @@ Then reload MCP from inside a Hermes session with `/reload-mcp`.
 - **Cortex connector endpoints** live under `/api/connector/` not `/api/v1/`.
 - **`description` is required** when creating cases and alerts.
 - **Destructive MCP tools are gated.** `thehive_delete_case`, `thehive_delete_alert`, `thehive_merge_cases` (irreversible), `thehive_promote_alert`, `thehive_run_responder`, `thehive_bulk_assign_cases`, and `thehive_bulk_close_cases` require `THEHIVE_ALLOW_DESTRUCTIVE_TOOLS=true`. The same gate protects single-case close/assign, generic case state/ownership changes, case creation with an owner, and alert status changes. Calls preview locally until both `dryRun: false` and `confirm: true` are supplied.
-- **Tool output and upstream responses are bounded.** Every tool declares MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), tool text is capped at 100,000 characters, upstream response bodies are capped at 10 MB, and bulk tools issue at most 5 concurrent requests.
+- **Tool output and upstream responses are bounded.** JSON tool responses use a 90,000 UTF-8 byte budget. Upstream response bodies are capped at 10 MB, and bulk tools issue at most five concurrent requests.
+- **TLP uses the TheHive 5.2+ scale.** `3` is Amber+Strict and `4` is Red. PAP still uses the 0–3 range.
 - **Raw query is gated.** `thehive_query` requires `THEHIVE_ENABLE_RAW_QUERY=true`.
 - **SSL verification is scoped.** Setting `THEHIVE_VERIFY_SSL=false` relaxes TLS certificate validation only for requests to TheHive (via a per-client undici dispatcher) and never disables it process-wide. A warning is logged to stderr when enabled.
 
