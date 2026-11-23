@@ -144,9 +144,9 @@ export function registerCaseTools(
         .number()
         .int()
         .min(0)
-        .max(3)
+        .max(4)
         .optional()
-        .describe("TLP: 0=Clear, 1=Green, 2=Amber, 3=Red (default: 2)"),
+        .describe("TLP 2.0: 0=Clear, 1=Green, 2=Amber, 3=Amber+Strict, 4=Red (default: 2)"),
       pap: z
         .number()
         .int()
@@ -229,9 +229,9 @@ export function registerCaseTools(
         .number()
         .int()
         .min(0)
-        .max(3)
+        .max(4)
         .optional()
-        .describe("New TLP level"),
+        .describe("TLP 2.0: 0=Clear, 1=Green, 2=Amber, 3=Amber+Strict, 4=Red"),
       pap: z
         .number()
         .int()

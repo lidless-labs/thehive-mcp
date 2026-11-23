@@ -131,9 +131,9 @@ export function registerObservableTools(
         .number()
         .int()
         .min(0)
-        .max(3)
+        .max(4)
         .optional()
-        .describe("TLP: 0=Clear, 1=Green, 2=Amber, 3=Red (default: 2)"),
+        .describe("TLP 2.0: 0=Clear, 1=Green, 2=Amber, 3=Amber+Strict, 4=Red (default: 2)"),
       pap: z
         .number()
         .int()
@@ -304,9 +304,9 @@ export function registerObservableTools(
         .number()
         .int()
         .min(0)
-        .max(3)
+        .max(4)
         .optional()
-        .describe("TLP level for all observables"),
+        .describe("TLP 2.0 for all observables: 0=Clear, 1=Green, 2=Amber, 3=Amber+Strict, 4=Red"),
       pap: z
         .number()
         .int()
