@@ -45,10 +45,36 @@ describe("formatJsonDocument", () => {
   });
 });
 
+it.each([formatJson, formatJsonDocument])("budgets escaped UTF-8 and keeps a whole prefix with provenance", (format) => {
+  const items = Array.from({ length: 30 }, (_, id) => ({
+    id,
+    description: "<&>🙂".repeat(300),
+  }));
+  const text = format(items, 200_000);
+  const { provenance, data } = JSON.parse(text);
+  expect(Buffer.byteLength(text)).toBeLessThanOrEqual(90_000);
+  expect(provenance.trust).toBe("untrusted");
+  expect(data).toMatchObject({ truncated: true, total: items.length });
+  expect(data.returned).toBe(13);
+  expect(data.items).toEqual(items.slice(0, data.returned));
+  expect(text).not.toMatch(/[<>&]/);
+});
+
+it("replaces an oversized multibyte object with a provenance-bearing stub", () => {
+  const text = formatJson({ description: "🙂".repeat(25_000) });
+  expect(Buffer.byteLength(text)).toBeLessThanOrEqual(90_000);
+  expect(JSON.parse(text)).toMatchObject({
+    provenance: { trust: "untrusted" },
+    data: { truncated: true },
+  });
+});
+
 describe("truncateText", () => {
   it("leaves short text alone and caps long text", () => {
     expect(truncateText("abc", 10)).toBe("abc");
-    expect(truncateText("abcdef", 3)).toBe("abc... [truncated]");
+    expect(truncateText("🙂".repeat(10), 19)).toBe("🙂... [truncated]");
+    expect(truncateText("abcdef", 3)).toBe("...");
+    expect(Buffer.byteLength(truncateText("🙂".repeat(30_000)))).toBeLessThanOrEqual(90_000);
   });
 });
 
