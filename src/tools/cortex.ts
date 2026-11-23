@@ -1,6 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { CortexWaitDeadlineError, withCortexWaitDeadline, type TheHiveClient } from "../client.js";
+import {
+  CortexWaitDeadlineError,
+  TheHiveRequestTimeoutError,
+  withCortexWaitDeadline,
+  type TheHiveClient,
+} from "../client.js";
 import { formatJson } from "./output.js";
 import {
   CREATE_OPEN_WORLD,
@@ -214,12 +219,12 @@ export function registerCortexTools(
             }) }],
           };
         }
-        if (error instanceof CortexWaitDeadlineError) {
+        if (error instanceof CortexWaitDeadlineError || error instanceof TheHiveRequestTimeoutError) {
           return {
             isError: true,
             content: [{ type: "text" as const, text: formatJson({
               outcome: "uncertain",
-              note: "The analyzer submission deadline expired before a job ID was received. Do not resubmit before checking for an existing job.",
+              note: "The analyzer submission timed out before a job ID was received. Do not resubmit before checking for an existing job.",
             }) }],
           };
         }

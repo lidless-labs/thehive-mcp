@@ -55,6 +55,12 @@ async function readBodyCapped(
 
 class SafeResponseError extends Error {}
 
+export class TheHiveRequestTimeoutError extends SafeResponseError {
+  constructor(timeoutMs: number) {
+    super(`TheHive API timeout after ${timeoutMs}ms`);
+  }
+}
+
 const CORTEX_WAIT_MS = 50_000;
 
 export class CortexWaitDeadlineError extends Error {
@@ -191,7 +197,7 @@ export class TheHiveClient {
       catch { throw new SafeResponseError("TheHive API returned invalid JSON"); }
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
-        throw new SafeResponseError(`TheHive API timeout after ${this.timeout}ms`);
+        throw new TheHiveRequestTimeoutError(this.timeout);
       }
       if (error instanceof SafeResponseError) throw error;
       throw new Error("TheHive API request failed");

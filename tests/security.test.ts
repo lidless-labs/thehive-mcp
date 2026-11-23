@@ -344,4 +344,22 @@ describe("Cortex wait deadlines", () => {
     expect(fetchSpy).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it("reports uncertain submission when the request timeout expires first", async () => {
+    vi.useFakeTimers();
+    const { tools, fetchSpy } = setup(true, 30_000);
+    fetchSpy.mockImplementationOnce((_url: string, { signal }: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        signal!.addEventListener("abort", () => reject(signal!.reason), { once: true });
+      }));
+    const result = tools.get("thehive_run_analyzer_and_wait")(analyzerArgs);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    const reply = await result;
+    expect(reply.isError).toBe(true);
+    expect(JSON.parse(reply.content[0].text).data).toMatchObject({ outcome: "uncertain" });
+    expect(reply.content[0].text).toContain("Do not resubmit");
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });
